@@ -1,0 +1,8 @@
+{
+  "name": "Copy of Right Hospital Finder",
+  "description": "Helping patients discover trusted, transparent, and affordable surgical care options in Bangalore with personalized professional support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
