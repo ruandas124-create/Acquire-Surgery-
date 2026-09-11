@@ -87,6 +87,21 @@ export function App() {
     }
   }, [activeView]);
 
+  // Check URL hash or query params so admins and hospital staff can navigate directly (e.g. #admin, #portal)
+  useEffect(() => {
+    const checkHashOrQuery = () => {
+      if (typeof window === 'undefined') return;
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      const params = new URLSearchParams(window.location.search);
+      if (hash === 'admin' || hash === 'portal' || hash === 'login' || params.has('admin') || params.has('portal')) {
+        setActiveView('admin');
+      }
+    };
+    checkHashOrQuery();
+    window.addEventListener('hashchange', checkHashOrQuery);
+    return () => window.removeEventListener('hashchange', checkHashOrQuery);
+  }, []);
+
   // Initial load
   useEffect(() => {
     async function loadData() {

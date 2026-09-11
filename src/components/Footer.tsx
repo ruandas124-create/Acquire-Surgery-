@@ -107,16 +107,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
                 <span>12th Main Rd, HAL 2nd Stage, Indiranagar, Bengaluru, Karnataka 560038</span>
               </div>
             </div>
-
-            {/* Portal Link */}
-            <div className="pt-2">
-              <button
-                onClick={onOpenAdmin}
-                className="text-[11px] font-semibold text-slate-400 hover:text-slate-200 border border-slate-700 hover:border-slate-500 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
-              >
-                Portal Login (Hospital &amp; Admin)
-              </button>
-            </div>
           </div>
         </div>
 
