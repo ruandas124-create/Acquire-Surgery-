@@ -2,13 +2,29 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_HOSPITALS, INITIAL_CATEGORIES, INITIAL_TREATMENTS, INITIAL_LEADS } from './src/data/initialData';
-import { Hospital, CategoryInfo, TreatmentInfo, Lead, LeadStatus } from './src/types';
+import { 
+  INITIAL_HOSPITAL_ACCOUNTS, 
+  INITIAL_SCHEDULES, 
+  hashPassword, 
+  generateRandomTempPassword 
+} from './src/data/crmData';
+import { 
+  Hospital, 
+  CategoryInfo, 
+  TreatmentInfo, 
+  Lead, 
+  LeadStatus, 
+  HospitalAccount, 
+  PatientSchedule 
+} from './src/types';
 
 // In-memory persistent state (seeded with comprehensive initial data)
 let hospitals: Hospital[] = [...INITIAL_HOSPITALS];
 let categories: CategoryInfo[] = [...INITIAL_CATEGORIES];
 let treatments: TreatmentInfo[] = [...INITIAL_TREATMENTS];
 let leads: Lead[] = [...INITIAL_LEADS];
+let hospitalAccounts: HospitalAccount[] = [...INITIAL_HOSPITAL_ACCOUNTS];
+let schedules: PatientSchedule[] = [...INITIAL_SCHEDULES];
 
 function parseBudgetNumeric(budgetString: string): number {
   if (!budgetString) return 1000000;
@@ -253,14 +269,196 @@ async function startServer() {
     if (!lead) {
       return res.status(404).json({ success: false, error: 'Lead not found' });
     }
-    const { status, assignedRep, note } = req.body;
+    const { status, assignedRep, note, authorName } = req.body;
     if (status) lead.status = status;
     if (assignedRep !== undefined) lead.assignedRep = assignedRep;
     if (note) {
       if (!lead.notes) lead.notes = [];
-      lead.notes.push(`[${new Date().toLocaleTimeString('en-IN')}] ${note}`);
+      const timestamp = new Date().toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+      const author = authorName || 'Admin';
+      lead.notes.push(`[${timestamp} by ${author}] ${note}`);
     }
     res.json({ success: true, data: lead });
+  });
+
+  // =================== PATIENT SCHEDULING ===================
+  app.get('/api/schedules', (req, res) => {
+    const hospitalId = req.query.hospitalId as string;
+    let list = [...schedules];
+    if (hospitalId) {
+      list = list.filter(s => s.hospitalId === hospitalId);
+    }
+    res.json({ success: true, data: list });
+  });
+
+  app.post('/api/schedules', (req, res) => {
+    const body = req.body;
+    if (!body.patientName || !body.mobile || !body.hospitalId || !body.surgeryName) {
+      return res.status(400).json({ success: false, error: 'Patient name, mobile, hospital, and surgery are required' });
+    }
+    const hosp = hospitals.find(h => h.id === body.hospitalId);
+    const newSchedule: PatientSchedule = {
+      id: `sched-${Date.now()}`,
+      patientName: body.patientName,
+      mobile: body.mobile,
+      hospitalId: body.hospitalId,
+      hospitalName: body.hospitalName || hosp?.name || 'Selected Hospital',
+      surgeryName: body.surgeryName,
+      minCost: body.minCost,
+      maxCost: body.maxCost,
+      budget: body.budget || '₹1 – ₹2 Lakh',
+      source: body.source || 'Acquire OPD',
+      referralDetails: body.referralDetails,
+      appointmentDate: body.appointmentDate || new Date().toISOString().split('T')[0],
+      preferredTime: body.preferredTime || '10:00 AM',
+      status: body.status || 'Scheduled',
+      createdAt: new Date().toISOString(),
+      notes: body.notes || [
+        {
+          id: `note-${Date.now()}`,
+          text: body.initialNote || 'Scheduled via Acquire OPD Platform',
+          authorName: body.authorName || 'Platform Coordinator',
+          createdAt: new Date().toISOString(),
+        }
+      ],
+    };
+    schedules.unshift(newSchedule);
+    res.status(201).json({ success: true, data: newSchedule });
+  });
+
+  app.patch('/api/schedules/:id', (req, res) => {
+    const schedule = schedules.find(s => s.id === req.params.id);
+    if (!schedule) {
+      return res.status(404).json({ success: false, error: 'Schedule record not found' });
+    }
+    const { status, appointmentDate, preferredTime, note, authorName, ...rest } = req.body;
+    if (status) schedule.status = status;
+    if (appointmentDate) schedule.appointmentDate = appointmentDate;
+    if (preferredTime) schedule.preferredTime = preferredTime;
+    Object.assign(schedule, rest);
+    if (note) {
+      if (!schedule.notes) schedule.notes = [];
+      schedule.notes.push({
+        id: `snote-${Date.now()}`,
+        text: note,
+        authorName: authorName || 'Staff',
+        createdAt: new Date().toISOString(),
+      });
+    }
+    res.json({ success: true, data: schedule });
+  });
+
+  app.delete('/api/schedules/:id', (req, res) => {
+    const idx = schedules.findIndex(s => s.id === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'Schedule record not found' });
+    }
+    const deleted = schedules.splice(idx, 1);
+    res.json({ success: true, data: deleted[0] });
+  });
+
+  // =================== HOSPITAL ACCESS MANAGEMENT ===================
+  app.get('/api/hospital-accounts', (req, res) => {
+    res.json({ success: true, data: hospitalAccounts });
+  });
+
+  app.post('/api/hospital-accounts', (req, res) => {
+    const { hospitalId, hospitalName, email, mobile, username, password, accountStatus } = req.body;
+    if (!hospitalName || !email || !mobile || !username) {
+      return res.status(400).json({ success: false, error: 'Hospital Name, Email, Mobile, and Username are required' });
+    }
+    // Check duplicate username
+    if (hospitalAccounts.some(a => a.username.toLowerCase() === username.toLowerCase())) {
+      return res.status(400).json({ success: false, error: 'Username is already in use by another hospital account' });
+    }
+
+    // Connect to existing hospital or create linked hospital
+    let matchedHosp = hospitals.find(h => h.id === hospitalId || h.name.toLowerCase() === hospitalName.toLowerCase());
+    let targetHospitalId = hospitalId;
+    if (!matchedHosp) {
+      targetHospitalId = `hosp-${Date.now()}`;
+      matchedHosp = {
+        id: targetHospitalId,
+        name: hospitalName,
+        category: 'Standard Hospital',
+        location: 'Bangalore',
+        city: 'Bangalore',
+        rating: 4.5,
+        reviewCount: 20,
+        establishedYear: 2018,
+        bedCount: 100,
+        specialties: ['General Surgery'],
+        facilities: ['NABH Accredited', '24x7 Emergency'],
+        accreditations: ['NABH'],
+        description: `Verified hospital partner ${hospitalName}.`,
+        imageUrl: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&w=800&q=80',
+        phone: mobile,
+        address: 'Bangalore, Karnataka',
+        insuranceCashless: ['Star Health', 'Medi Assist'],
+        treatmentEstimates: [],
+        email,
+        mobile,
+      };
+      hospitals.unshift(matchedHosp);
+    }
+
+    const plainPassword = password || generateRandomTempPassword();
+    const newAccount: HospitalAccount = {
+      id: `acc-${Date.now()}`,
+      hospitalId: matchedHosp.id,
+      hospitalName: matchedHosp.name,
+      email,
+      mobile,
+      username,
+      passwordHash: hashPassword(plainPassword),
+      accountStatus: accountStatus || 'Active',
+      createdAt: new Date().toISOString(),
+      mustChangePassword: true,
+    };
+
+    hospitalAccounts.unshift(newAccount);
+    res.status(201).json({ 
+      success: true, 
+      data: newAccount, 
+      tempPassword: plainPassword 
+    });
+  });
+
+  app.patch('/api/hospital-accounts/:id', (req, res) => {
+    const acc = hospitalAccounts.find(a => a.id === req.params.id);
+    if (!acc) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    const { accountStatus, email, mobile, hospitalName } = req.body;
+    if (accountStatus) acc.accountStatus = accountStatus;
+    if (email) acc.email = email;
+    if (mobile) acc.mobile = mobile;
+    if (hospitalName) acc.hospitalName = hospitalName;
+    res.json({ success: true, data: acc });
+  });
+
+  app.post('/api/hospital-accounts/:id/reset-password', (req, res) => {
+    const acc = hospitalAccounts.find(a => a.id === req.params.id);
+    if (!acc) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    const newPlainPassword = req.body.password || generateRandomTempPassword();
+    acc.passwordHash = hashPassword(newPlainPassword);
+    acc.mustChangePassword = true;
+    res.json({ 
+      success: true, 
+      message: 'Password reset successfully', 
+      tempPassword: newPlainPassword 
+    });
+  });
+
+  app.delete('/api/hospital-accounts/:id', (req, res) => {
+    const idx = hospitalAccounts.findIndex(a => a.id === req.params.id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: 'Account not found' });
+    }
+    const deleted = hospitalAccounts.splice(idx, 1);
+    res.json({ success: true, data: deleted[0] });
   });
 
   // Stats: GET

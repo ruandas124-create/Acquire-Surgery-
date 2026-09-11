@@ -1,6 +1,6 @@
 {
   "name": "Copy of Right Hospital Finder",
-  "description": "Helping patients discover trusted, transparent, and affordable surgical care options in Bangalore with personalized professional support.",
+  "description": "Hospital Login, Healthcare CRM, Patient Scheduling, Hospital Access Management, and surgical care coordination in Bangalore.",
   "requestFramePermissions": [],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

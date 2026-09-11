@@ -110,19 +110,19 @@ export const PortalLogin: React.FC<PortalLoginProps> = ({
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* 1. Email Address Input */}
+              {/* 1. Username or Email Address Input */}
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1.5">
-                  Email Address
+                  Username or Email Address
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                   <input
-                    type="email"
+                    type="text"
                     required
                     autoFocus
-                    autoComplete="email"
-                    placeholder="name@acquiresurgery.com"
+                    autoComplete="username"
+                    placeholder="e.g. admin or manipal_desk or email"
                     value={email}
                     onChange={(e) => {
                       setEmail(e.target.value);
@@ -149,7 +149,7 @@ export const PortalLogin: React.FC<PortalLoginProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     required
                     autoComplete="current-password"
-                    placeholder="Enter your password"
+                    placeholder="Enter account password"
                     value={password}
                     onChange={(e) => {
                       setPassword(e.target.value);

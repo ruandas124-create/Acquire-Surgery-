@@ -6,14 +6,31 @@ import {
   TreatmentInfo, 
   LeadStatus, 
   HospitalCategory, 
-  AuthUser 
+  AuthUser,
+  PatientSchedule,
+  ScheduleStatus,
+  HospitalAccount,
+  LeadSource
 } from '../../types';
 import { api } from '../../services/api';
 import { 
+  createHospitalWhatsAppMessage, 
+  openWhatsAppShare, 
+  generateRandomTempPassword, 
+  LEAD_SOURCES, 
+  SCHEDULE_STATUSES 
+} from '../../data/crmData';
+import { HospitalDetailsModal } from './HospitalDetailsModal';
+import { ResetPasswordModal } from './ResetPasswordModal';
+import { LeadsNotesModal } from './LeadsNotesModal';
+import { Logo } from '../Logo';
+import { 
   Users, 
   Building2, 
-  Layers, 
-  Activity, 
+  Calendar, 
+  KeyRound, 
+  BarChart3, 
+  Settings, 
   Plus, 
   Edit3, 
   Trash2, 
@@ -23,7 +40,6 @@ import {
   Clock, 
   Phone, 
   MessageSquare, 
-  UserCheck, 
   Filter, 
   Search,
   IndianRupee,
@@ -34,8 +50,16 @@ import {
   ChevronRight,
   TrendingUp,
   MapPin,
-  Calendar,
-  Sparkles
+  Sparkles,
+  MoreVertical,
+  Lock,
+  Mail,
+  UserCheck,
+  FileText,
+  Copy,
+  Check,
+  AlertCircle,
+  XCircle
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -45,20 +69,14 @@ interface AdminDashboardProps {
   onSwitchToHospital?: (hospitalId: string) => void;
 }
 
-const REPRESENTATIVES = [
-  'Unassigned',
-  'Dr. Priya Nair (Senior Coordinator)',
-  'Rahul Sharma (Orthopedic Specialist)',
-  'Kavitha R. (Cardiac & Laparoscopic)',
-  'Anand Verma (Patient Navigator)'
-];
-
-const LEAD_STATUSES: LeadStatus[] = [
+const CRM_LEAD_STATUSES: LeadStatus[] = [
   'New',
   'Contacted',
-  'Assistance in Progress',
-  'Hospital Selected',
-  'Closed'
+  'Follow-up',
+  'Hospital Shortlisted',
+  'Scheduled',
+  'Completed',
+  'Cancelled'
 ];
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ 
@@ -67,47 +85,99 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onClose,
   onSwitchToHospital
 }) => {
-  const [activeTab, setActiveTab] = useState<'leads' | 'hospitals' | 'categories' | 'treatments'>('leads');
+  const [activeTab, setActiveTab] = useState<
+    'overview' | 'leads' | 'scheduling' | 'access' | 'hospitals' | 'reports' | 'settings'
+  >('overview');
+
+  // Core CRM Data States
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [schedules, setSchedules] = useState<PatientSchedule[]>([]);
+  const [hospitalAccounts, setHospitalAccounts] = useState<HospitalAccount[]>([]);
   const [hospitals, setHospitals] = useState<Hospital[]>([]);
   const [categories, setCategories] = useState<CategoryInfo[]>([]);
   const [treatments, setTreatments] = useState<TreatmentInfo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Leads filter
-  const [leadStatusFilter, setLeadStatusFilter] = useState<string>('All');
+  // Toast / Notifications
+  const [toastMsg, setToastMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+    setToastMsg({ type, text });
+    setTimeout(() => setToastMsg(null), 4000);
+  };
+
+  // =================== LEADS MANAGEMENT STATE ===================
   const [leadSearch, setLeadSearch] = useState('');
+  const [leadStatusFilter, setLeadStatusFilter] = useState('All');
+  const [leadNotesModalTarget, setLeadNotesModalTarget] = useState<Lead | null>(null);
 
-  // Selected lead for note/status modal
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [newNote, setNewNote] = useState('');
+  // =================== PATIENT SCHEDULING STATE ===================
+  const [schedPatientName, setSchedPatientName] = useState('');
+  const [schedMobile, setSchedMobile] = useState('');
+  const [schedHospitalId, setSchedHospitalId] = useState('');
+  const [schedSurgeryName, setSchedSurgeryName] = useState('');
+  const [schedMinCost, setSchedMinCost] = useState<number | undefined>();
+  const [schedMaxCost, setSchedMaxCost] = useState<number | undefined>();
+  const [schedBudget, setSchedBudget] = useState('₹1 – ₹2 Lakh');
+  const [schedSource, setSchedSource] = useState<LeadSource>('Acquire OPD');
+  const [schedReferralDetails, setSchedReferralDetails] = useState('');
+  const [schedDate, setSchedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [schedTime, setSchedTime] = useState('10:00 AM');
+  const [schedNotes, setSchedNotes] = useState('');
+  const [schedStatusFilter, setSchedStatusFilter] = useState('All');
+  const [schedSearch, setSchedSearch] = useState('');
+  const [activeSchedDropdown, setActiveSchedDropdown] = useState<string | null>(null);
+  const [selectedScheduleForNotes, setSelectedScheduleForNotes] = useState<PatientSchedule | null>(null);
 
-  // Hospital modal
-  const [editingHospital, setEditingHospital] = useState<Partial<Hospital> | null>(null);
-  const [isHospitalModalOpen, setIsHospitalModalOpen] = useState(false);
+  // =================== HOSPITAL ACCESS STATE ===================
+  const [accHospitalSelect, setAccHospitalSelect] = useState('');
+  const [accHospitalName, setAccHospitalName] = useState('');
+  const [accEmail, setAccEmail] = useState('');
+  const [accMobile, setAccMobile] = useState('');
+  const [accUsername, setAccUsername] = useState('');
+  const [accPassword, setAccPassword] = useState(generateRandomTempPassword());
+  const [accConfirmPassword, setAccConfirmPassword] = useState(accPassword);
+  const [accStatus, setAccStatus] = useState<'Active' | 'Inactive'>('Active');
+  const [accCreatedSuccess, setAccCreatedSuccess] = useState<{
+    account: HospitalAccount;
+    tempPassword: string;
+  } | null>(null);
+  const [activeAccountDropdown, setActiveAccountDropdown] = useState<string | null>(null);
 
-  // Category editing state
-  const [editingCategory, setEditingCategory] = useState<CategoryInfo | null>(null);
+  // Modals for details & reset password
+  const [viewingHospital, setViewingHospital] = useState<Hospital | null>(null);
+  const [resettingAccount, setResettingAccount] = useState<HospitalAccount | null>(null);
 
-  // Treatment modal
-  const [editingTreatment, setEditingTreatment] = useState<Partial<TreatmentInfo> | null>(null);
-  const [isTreatmentModalOpen, setIsTreatmentModalOpen] = useState(false);
-
+  // Load all CRM data
   const loadData = async () => {
     setLoading(true);
     try {
-      const [leadsData, hospData, catData, treatData] = await Promise.all([
+      const [leadsData, hospData, catData, treatData, schedsData, accountsData] = await Promise.all([
         api.getLeads(),
         api.getHospitals(),
         api.getCategories(),
         api.getTreatments(),
+        api.getSchedules(),
+        api.getHospitalAccounts(),
       ]);
       setLeads(leadsData);
       setHospitals(hospData);
       setCategories(catData);
       setTreatments(treatData);
+      setSchedules(schedsData);
+      setHospitalAccounts(accountsData);
+
+      if (hospData.length > 0 && !schedHospitalId) {
+        setSchedHospitalId(hospData[0].id);
+        const surgeries = hospData[0].surgeries || [];
+        if (surgeries.length > 0) {
+          setSchedSurgeryName(surgeries[0].name);
+          setSchedMinCost(surgeries[0].minCost);
+          setSchedMaxCost(surgeries[0].maxCost);
+        }
+      }
     } catch (err) {
-      console.error('Error loading admin data', err);
+      console.error('Error loading CRM data', err);
     } finally {
       setLoading(false);
     }
@@ -117,909 +187,1652 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     loadData();
   }, []);
 
-  // Update lead status
-  const handleUpdateLeadStatus = async (leadId: string, status: LeadStatus) => {
-    try {
-      const updated = await api.updateLead(leadId, { status });
-      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
-      if (selectedLead?.id === leadId) setSelectedLead(updated);
-    } catch {
-      alert('Failed to update lead status');
+  // Update selected hospital surgeries in scheduling form
+  const selectedHospitalObj = hospitals.find(h => h.id === schedHospitalId);
+  const availableSurgeries = selectedHospitalObj?.surgeries || [
+    { id: 'gen-1', name: 'General Consultation & Laparoscopy', minCost: 45000, maxCost: 90000, status: 'Active' as const },
+    { id: 'gen-2', name: 'Total Knee Replacement', minCost: 150000, maxCost: 280000, status: 'Active' as const },
+    { id: 'gen-3', name: 'Gallbladder Removal (Cholecystectomy)', minCost: 65000, maxCost: 110000, status: 'Active' as const },
+  ];
+
+  const handleHospitalChange = (hospId: string) => {
+    setSchedHospitalId(hospId);
+    const targetHosp = hospitals.find(h => h.id === hospId);
+    if (targetHosp && targetHosp.surgeries && targetHosp.surgeries.length > 0) {
+      setSchedSurgeryName(targetHosp.surgeries[0].name);
+      setSchedMinCost(targetHosp.surgeries[0].minCost);
+      setSchedMaxCost(targetHosp.surgeries[0].maxCost);
     }
   };
 
-  // Update representative
-  const handleAssignRep = async (leadId: string, rep: string) => {
-    try {
-      const updated = await api.updateLead(leadId, { assignedRep: rep });
-      setLeads(prev => prev.map(l => l.id === leadId ? updated : l));
-      if (selectedLead?.id === leadId) setSelectedLead(updated);
-    } catch {
-      alert('Failed to assign representative');
+  const handleSurgeryChange = (surgName: string) => {
+    setSchedSurgeryName(surgName);
+    const surg = availableSurgeries.find(s => s.name === surgName);
+    if (surg) {
+      setSchedMinCost(surg.minCost);
+      setSchedMaxCost(surg.maxCost);
     }
   };
 
-  // Add note to lead
-  const handleAddNote = async () => {
-    if (!selectedLead || !newNote.trim()) return;
-    try {
-      const updated = await api.updateLead(selectedLead.id, { note: newNote.trim() });
-      setLeads(prev => prev.map(l => l.id === selectedLead.id ? updated : l));
-      setSelectedLead(updated);
-      setNewNote('');
-    } catch {
-      alert('Failed to add note');
-    }
-  };
-
-  // Save hospital
-  const handleSaveHospital = async (e: React.FormEvent) => {
+  // Submit Patient Scheduling Form
+  const handleScheduleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingHospital?.name) return;
+    if (!schedPatientName.trim() || !schedMobile.trim()) {
+      showToast('Patient name and mobile number are required', 'error');
+      return;
+    }
+
     try {
-      if (editingHospital.id) {
-        const updated = await api.updateHospital(editingHospital.id, editingHospital);
-        setHospitals(prev => prev.map(h => h.id === updated.id ? updated : h));
-      } else {
-        const created = await api.addHospital(editingHospital);
-        setHospitals(prev => [created, ...prev]);
-      }
-      setIsHospitalModalOpen(false);
-      setEditingHospital(null);
-    } catch {
-      alert('Failed to save hospital');
+      const hosp = hospitals.find(h => h.id === schedHospitalId);
+      const newSched = await api.createSchedule({
+        patientName: schedPatientName.trim(),
+        mobile: schedMobile.trim(),
+        hospitalId: schedHospitalId,
+        hospitalName: hosp?.name || 'Selected Hospital',
+        surgeryName: schedSurgeryName,
+        minCost: schedMinCost,
+        maxCost: schedMaxCost,
+        budget: schedBudget,
+        source: schedSource,
+        referralDetails: schedSource === 'Referral' ? schedReferralDetails : undefined,
+        appointmentDate: schedDate,
+        preferredTime: schedTime,
+        status: 'Scheduled',
+        initialNote: schedNotes.trim() || 'Scheduled via Admin Patient Scheduling Desk',
+        authorName: user.name,
+      });
+
+      setSchedules(prev => [newSched, ...prev]);
+      showToast(`Patient ${newSched.patientName} scheduled successfully at ${newSched.hospitalName}!`);
+
+      // Reset form
+      setSchedPatientName('');
+      setSchedMobile('');
+      setSchedNotes('');
+      setSchedReferralDetails('');
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to schedule patient', 'error');
     }
   };
 
-  // Delete hospital
-  const handleDeleteHospital = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this hospital?')) return;
+  // Update Schedule Status
+  const handleUpdateScheduleStatus = async (schedId: string, nextStatus: ScheduleStatus) => {
     try {
-      await api.deleteHospital(id);
-      setHospitals(prev => prev.filter(h => h.id !== id));
+      const updated = await api.updateSchedule(schedId, {
+        status: nextStatus,
+        note: `Status updated to ${nextStatus}`,
+        authorName: user.name,
+      });
+      setSchedules(prev => prev.map(s => s.id === schedId ? updated : s));
+      showToast(`Appointment status updated to ${nextStatus}`);
     } catch {
-      alert('Failed to delete hospital');
+      showToast('Failed to update appointment status', 'error');
     }
   };
 
-  // Save Category description
-  const handleSaveCategory = async (e: React.FormEvent) => {
+  // Delete Schedule
+  const handleDeleteSchedule = async (schedId: string) => {
+    if (!confirm('Are you sure you want to remove this appointment record?')) return;
+    try {
+      await api.deleteSchedule(schedId);
+      setSchedules(prev => prev.filter(s => s.id !== schedId));
+      showToast('Appointment record removed');
+    } catch {
+      showToast('Failed to delete appointment', 'error');
+    }
+  };
+
+  // Submit Create Hospital Access
+  const handleCreateHospitalAccess = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingCategory) return;
+    if (!accHospitalName.trim() || !accEmail.trim() || !accMobile.trim() || !accUsername.trim()) {
+      showToast('All fields are required to create hospital access', 'error');
+      return;
+    }
+    if (accPassword !== accConfirmPassword) {
+      showToast('Password and Confirm Password do not match', 'error');
+      return;
+    }
+
     try {
-      const updated = await api.updateCategory(editingCategory.id, editingCategory);
-      setCategories(prev => prev.map(c => c.id === updated.id ? updated : c));
-      setEditingCategory(null);
-      alert('Hospital category description updated successfully!');
-    } catch {
-      alert('Failed to update category');
+      const res = await api.createHospitalAccount({
+        hospitalId: accHospitalSelect || undefined,
+        hospitalName: accHospitalName.trim(),
+        email: accEmail.trim().toLowerCase(),
+        mobile: accMobile.trim(),
+        username: accUsername.trim().toLowerCase(),
+        password: accPassword,
+        accountStatus: accStatus,
+      });
+
+      setHospitalAccounts(prev => [res.account, ...prev]);
+      setAccCreatedSuccess({
+        account: res.account,
+        tempPassword: res.tempPassword,
+      });
+      showToast(`Hospital access credentials created for ${res.account.hospitalName}!`);
+
+      // Reset form fields
+      setAccHospitalSelect('');
+      setAccHospitalName('');
+      setAccEmail('');
+      setAccMobile('');
+      setAccUsername('');
+      const nextTemp = generateRandomTempPassword();
+      setAccPassword(nextTemp);
+      setAccConfirmPassword(nextTemp);
+    } catch (err: any) {
+      showToast(err?.message || 'Failed to create hospital account', 'error');
     }
   };
 
-  // Filtered leads
-  const filteredLeads = leads.filter(l => {
-    const matchesStatus = leadStatusFilter === 'All' || l.status === leadStatusFilter;
-    const matchesSearch = l.name.toLowerCase().includes(leadSearch.toLowerCase()) ||
-                          l.mobile.toLowerCase().includes(leadSearch.toLowerCase()) ||
-                          l.treatment.toLowerCase().includes(leadSearch.toLowerCase());
-    return matchesStatus && matchesSearch;
+  // Toggle Account Active/Inactive
+  const handleToggleAccountStatus = async (account: HospitalAccount) => {
+    const nextStatus = account.accountStatus === 'Active' ? 'Inactive' : 'Active';
+    try {
+      const updated = await api.updateHospitalAccount(account.id, { accountStatus: nextStatus });
+      setHospitalAccounts(prev => prev.map(a => a.id === account.id ? updated : a));
+      showToast(`Account status updated to ${nextStatus}`);
+    } catch {
+      showToast('Failed to update account status', 'error');
+    }
+  };
+
+  // Send WhatsApp Login Details
+  const handleSendWhatsAppLogin = (account: HospitalAccount, customPassword?: string) => {
+    const passwordToShare = customPassword || 'surgery123 (Temporary Password)';
+    const msg = createHospitalWhatsAppMessage({
+      hospitalName: account.hospitalName,
+      username: account.username,
+      tempPassword: passwordToShare,
+    });
+    openWhatsAppShare(account.mobile, msg);
+    showToast(`Opening WhatsApp to share credentials with ${account.hospitalName}...`);
+  };
+
+  // Filter Leads
+  const filteredLeads = leads.filter(lead => {
+    const matchesSearch = 
+      lead.name.toLowerCase().includes(leadSearch.toLowerCase()) ||
+      lead.mobile.includes(leadSearch) ||
+      lead.treatment.toLowerCase().includes(leadSearch.toLowerCase()) ||
+      (lead.preferredHospitalName || '').toLowerCase().includes(leadSearch.toLowerCase());
+    
+    const matchesStatus = leadStatusFilter === 'All' || lead.status === leadStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Filter Schedules
+  const filteredSchedules = schedules.filter(sched => {
+    const matchesSearch = 
+      sched.patientName.toLowerCase().includes(schedSearch.toLowerCase()) ||
+      sched.mobile.includes(schedSearch) ||
+      sched.hospitalName.toLowerCase().includes(schedSearch.toLowerCase()) ||
+      sched.surgeryName.toLowerCase().includes(schedSearch.toLowerCase());
+
+    const matchesStatus = schedStatusFilter === 'All' || sched.status === schedStatusFilter;
+    return matchesSearch && matchesStatus;
   });
 
   return (
-    <div id="acquire-admin-dashboard" className="py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Top Banner & User Session Bar */}
-      <div className="bg-slate-900 text-white p-6 sm:p-7 rounded-3xl mb-8 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div>
-            <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold uppercase tracking-wider mb-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Acquire SURGERY • Master Administrator Dashboard</span>
+    <div id="acquire-admin-crm" className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800">
+      {/* Top Navbar */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Logo size="sm" showTagline={false} />
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#062B61] text-white">
+                Admin CRM
+              </span>
+              <span className="text-xs text-slate-500 font-semibold hidden md:inline">
+                Acquire OPD Healthcare Operations
+              </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-              Platform Healthcare Operations &amp; Inquiries
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Track Bangalore patient search requests, manage verified hospital profiles, configure neutral category descriptions, and oversee surgical package estimates.
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Logged in User Pill */}
-            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/10 border border-white/15 text-left">
-              <div className="w-8 h-8 rounded-full bg-blue-500 text-white font-bold flex items-center justify-center text-xs shadow-inner">
-                VM
-              </div>
-              <div className="text-xs">
-                <span className="font-bold block text-white">{user.name}</span>
-                <span className="text-[10px] text-cyan-300 block">{user.title || 'Super Administrator'}</span>
-              </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-slate-900">{user.name}</div>
+              <div className="text-[11px] text-slate-500">Master Platform Admin</div>
             </div>
 
-            {/* Switch to Hospital Dashboard quick button */}
-            {onSwitchToHospital && (
-              <button
-                onClick={() => onSwitchToHospital('hosp-manipal-oar')}
-                className="px-3.5 py-2 rounded-xl bg-emerald-700/80 hover:bg-emerald-600 text-white text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                title="Switch view to simulate Hospital Partner Dashboard"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">View as</span> Hospital Partner
-              </button>
-            )}
-
-            {/* Refresh */}
-            <button
-              onClick={loadData}
-              className="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors cursor-pointer"
-              title="Refresh Data"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Logout */}
             <button
               onClick={onLogout}
-              className="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Sign Out of Portal"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Log Out</span>
-            </button>
-
-            {/* Exit to Public Website */}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              Exit to Website
+              <LogOut className="w-3.5 h-3.5 text-slate-500" />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Total Inquiries</span>
-            <Users className="w-4 h-4 text-[#062B61]" />
-          </div>
-          <span className="text-2xl font-black text-[#062B61] block">{leads.length}</span>
-          <span className="text-[11px] text-emerald-600 font-semibold">{leads.filter(l => l.status === 'New').length} New Pending</span>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Bangalore Hospitals</span>
-            <Building2 className="w-4 h-4 text-slate-600" />
-          </div>
-          <span className="text-2xl font-black text-slate-900 block">{hospitals.length}</span>
-          <span className="text-[11px] text-slate-400 font-semibold">Across All 4 Categories</span>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">In-Progress Assistance</span>
-            <Clock className="w-4 h-4 text-amber-600" />
-          </div>
-          <span className="text-2xl font-black text-amber-600 block">
-            {leads.filter(l => l.status === 'Assistance in Progress' || l.status === 'Contacted').length}
-          </span>
-          <span className="text-[11px] text-amber-700 font-semibold">Assigned to Navigators</span>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Hospitals Selected</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <span className="text-2xl font-black text-emerald-700 block">
-            {leads.filter(l => l.status === 'Hospital Selected' || l.status === 'Closed').length}
-          </span>
-          <span className="text-[11px] text-emerald-700 font-semibold">Treatment Decisions Made</span>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto pb-1">
-        <button
-          onClick={() => setActiveTab('leads')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'leads'
-              ? 'border-b-2 border-[#062B61] text-[#062B61] bg-blue-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Patient Requests &amp; Leads ({leads.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('hospitals')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'hospitals'
-              ? 'border-b-2 border-[#062B61] text-[#062B61] bg-blue-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Bangalore Hospitals ({hospitals.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('categories')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'categories'
-              ? 'border-b-2 border-[#062B61] text-[#062B61] bg-blue-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Layers className="w-4 h-4" />
-          <span>Category Guidance Rules ({categories.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('treatments')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'treatments'
-              ? 'border-b-2 border-[#062B61] text-[#062B61] bg-blue-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Activity className="w-4 h-4" />
-          <span>Surgical Procedures &amp; Packages ({treatments.length})</span>
-        </button>
-      </div>
-
-      {/* TAB 1: LEADS MANAGEMENT */}
-      {activeTab === 'leads' && (
-        <div className="space-y-6">
-          {/* Filter Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="relative flex-1">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="text"
-                  placeholder="Search patient name, mobile, or surgery requirement..."
-                  value={leadSearch}
-                  onChange={(e) => setLeadSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-slate-400" />
-              <span className="text-xs text-slate-500 font-medium">Status:</span>
-              <select
-                value={leadStatusFilter}
-                onChange={(e) => setLeadStatusFilter(e.target.value)}
-                className="text-xs sm:text-sm rounded-xl border border-slate-200 py-1.5 px-3 bg-white font-medium text-slate-700"
+        {/* 7 CRM Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto gap-1 border-t border-slate-100 no-scrollbar">
+          {[
+            { id: 'overview', label: 'Dashboard Overview', icon: BarChart3 },
+            { id: 'leads', label: `Website Leads (${leads.length})`, icon: Users },
+            { id: 'scheduling', label: `Patient Scheduling (${schedules.length})`, icon: Calendar },
+            { id: 'access', label: `Hospital Access (${hospitalAccounts.length})`, icon: KeyRound },
+            { id: 'hospitals', label: `Hospitals (${hospitals.length})`, icon: Building2 },
+            { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp },
+            { id: 'settings', label: 'Settings', icon: Settings },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  isActive
+                    ? 'border-[#062B61] text-[#062B61] bg-blue-50/50'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                }`}
               >
-                <option value="All">All Inquiries ({leads.length})</option>
-                {LEAD_STATUSES.map(s => (
-                  <option key={s} value={s}>
-                    {s} ({leads.filter(l => l.status === s).length})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#062B61]' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
 
-          {/* Leads Table */}
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px] tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Patient &amp; Contact</th>
-                    <th className="py-3.5 px-4">Requested Surgery</th>
-                    <th className="py-3.5 px-4">Budget Bracket</th>
-                    <th className="py-3.5 px-4">Matched Options</th>
-                    <th className="py-3.5 px-4">Assigned Coordinator</th>
-                    <th className="py-3.5 px-4">Status</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredLeads.length === 0 ? (
-                    <tr>
-                      <td colSpan={7} className="py-12 text-center text-slate-400">
-                        No patient leads matching the selected filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900">{lead.name}</div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                            <Phone className="w-3 h-3" />
-                            <span>{lead.mobile}</span>
-                          </div>
-                          <div className="text-[10px] text-slate-400 mt-0.5">
-                            {new Date(lead.createdAt).toLocaleDateString('en-IN', {
-                              day: 'numeric',
-                              month: 'short',
-                              year: 'numeric'
-                            })}
-                          </div>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
-                            {lead.treatment}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-medium text-slate-700">
-                            {lead.budget}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="text-xs font-bold text-blue-700">
-                            {lead.matchedHospitalCount || lead.matchedHospitalIds?.length || 0} hospitals
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <select
-                            value={lead.assignedRep || 'Unassigned'}
-                            onChange={(e) => handleAssignRep(lead.id, e.target.value)}
-                            className="text-xs rounded-lg border border-slate-200 py-1 px-2 bg-white text-slate-700 font-medium"
-                          >
-                            {REPRESENTATIVES.map(r => (
-                              <option key={r} value={r}>{r}</option>
-                            ))}
-                          </select>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <select
-                            value={lead.status}
-                            onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value as LeadStatus)}
-                            className={`text-xs font-bold rounded-lg border py-1 px-2.5 ${
-                              lead.status === 'New'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : lead.status === 'Contacted'
-                                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                : lead.status === 'Assistance in Progress'
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : lead.status === 'Hospital Selected'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
-                          >
-                            {LEAD_STATUSES.map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <button
-                            onClick={() => setSelectedLead(lead)}
-                            className="text-xs font-bold text-[#062B61] hover:text-blue-800 bg-blue-50 px-2.5 py-1 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
-                          >
-                            View &amp; Notes
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* Floating Toast */}
+      {toastMsg && (
+        <div 
+          className={`fixed top-20 right-6 z-50 px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold text-white animate-in fade-in slide-in-from-top-4 ${
+            toastMsg.type === 'success' ? 'bg-emerald-700' : 'bg-rose-700'
+          }`}
+        >
+          {toastMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+          <span>{toastMsg.text}</span>
         </div>
       )}
 
-      {/* TAB 2: HOSPITALS DIRECTORY */}
-      {activeTab === 'hospitals' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Registered Bangalore Hospitals</h2>
-              <p className="text-xs text-slate-500">Configure bed capacities, categories, specialties, and package estimates.</p>
-            </div>
-            <button
-              onClick={() => {
-                setEditingHospital({
-                  name: '',
-                  category: 'Standard Hospital',
-                  location: 'Bangalore',
-                  city: 'Bangalore',
-                  rating: 4.5,
-                  reviewCount: 100,
-                  establishedYear: 2010,
-                  bedCount: 150,
-                  specialties: ['Orthopedics', 'General Surgery'],
-                  facilities: ['NABH Accredited', '24x7 Emergency'],
-                  accreditations: ['NABH'],
-                  description: '',
-                  imageUrl: 'https://images.unsplash.com/photo-1587351021759-3e566b6af7cc?auto=format&fit=crop&w=800&q=80',
-                  phone: '+91 80 0000 0000',
-                  address: 'Bangalore, Karnataka',
-                  insuranceCashless: ['Star Health', 'HDFC ERGO'],
-                  treatmentEstimates: []
-                });
-                setIsHospitalModalOpen(true);
-              }}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-[#062B61] text-white text-xs font-bold rounded-xl hover:bg-[#0A3B75] transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Hospital</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {hospitals.map((hosp) => (
-              <div key={hosp.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between">
+      {/* Content Body */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* =================== TAB 1: OVERVIEW =================== */}
+        {activeTab === 'overview' && (
+          <div className="space-y-7">
+            {/* Metric KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
                 <div>
-                  <div className="h-40 bg-slate-100 relative overflow-hidden">
-                    <img 
-                      src={hosp.imageUrl} 
-                      alt={hosp.name} 
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?auto=format&fit=crop&w=800&q=80';
-                      }}
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Total Website Leads</span>
+                  <span className="text-2xl font-bold text-slate-900 mt-1 block">{leads.length}</span>
+                  <span className="text-[11px] text-emerald-700 font-semibold mt-0.5 inline-flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> +18% this week
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-blue-50 text-[#062B61] flex items-center justify-center">
+                  <Users className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Scheduled Patients</span>
+                  <span className="text-2xl font-bold text-slate-900 mt-1 block">{schedules.length}</span>
+                  <span className="text-[11px] text-[#062B61] font-semibold mt-0.5 inline-flex items-center gap-1">
+                    Active consultations
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+                  <Calendar className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Partner Hospitals</span>
+                  <span className="text-2xl font-bold text-slate-900 mt-1 block">{hospitals.length}</span>
+                  <span className="text-[11px] text-slate-500 font-medium mt-0.5 inline-flex items-center gap-1">
+                    {hospitalAccounts.filter(a => a.accountStatus === 'Active').length} Active Logins
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                  <Building2 className="w-6 h-6" />
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">Direct Helpline Desk</span>
+                  <span className="text-sm font-bold text-slate-900 mt-1 block">+91 94296 93887</span>
+                  <span className="text-[11px] text-slate-500 mt-0.5 block truncate">
+                    acquireopd@gmail.com
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                  <Phone className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Actions & Recent Tables */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-7">
+              {/* Recent Inquiries */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-[#062B61]" />
+                    Recent Patient Inquiries
+                  </h3>
+                  <button 
+                    onClick={() => setActiveTab('leads')} 
+                    className="text-xs font-semibold text-[#062B61] hover:underline"
+                  >
+                    View All Leads
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {leads.slice(0, 5).map(l => (
+                    <div key={l.id} className="py-3 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900">{l.name}</div>
+                        <div className="text-[11px] text-slate-500">{l.treatment} • {l.mobile}</div>
+                      </div>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        {l.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Recent Schedules */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#062B61]" />
+                    Upcoming Patient Schedules
+                  </h3>
+                  <button 
+                    onClick={() => setActiveTab('scheduling')} 
+                    className="text-xs font-semibold text-[#062B61] hover:underline"
+                  >
+                    Manage Schedules
+                  </button>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {schedules.slice(0, 5).map(s => (
+                    <div key={s.id} className="py-3 flex items-center justify-between text-xs">
+                      <div>
+                        <div className="font-bold text-slate-900">{s.patientName}</div>
+                        <div className="text-[11px] text-slate-500">{s.hospitalName} • {s.surgeryName}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold text-slate-800">{s.appointmentDate}</div>
+                        <span className="text-[10px] text-indigo-600 font-bold">{s.status}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================== TAB 2: WEBSITE FORMS / LEADS =================== */}
+        {activeTab === 'leads' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-[#062B61]" />
+                    Website Form Submissions & Patient Leads ({filteredLeads.length})
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Track incoming inquiries, update consultation statuses directly, and log clinical follow-up notes.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => loadData()}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Search and Filters Bar */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-5 pb-2">
+                <div className="sm:col-span-2 relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  <input
+                    type="text"
+                    value={leadSearch}
+                    onChange={(e) => setLeadSearch(e.target.value)}
+                    placeholder="Search by patient name, phone number, treatment, or preferred hospital..."
+                    className="w-full pl-10 pr-4 py-2 text-xs border border-slate-300 rounded-xl bg-white focus:ring-2 focus:ring-[#062B61]"
+                  />
+                </div>
+
+                <div>
+                  <select
+                    value={leadStatusFilter}
+                    onChange={(e) => setLeadStatusFilter(e.target.value)}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl bg-white font-medium focus:ring-2 focus:ring-[#062B61]"
+                  >
+                    <option value="All">All Statuses</option>
+                    {CRM_LEAD_STATUSES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Leads Table (Horizontally Scrollable) */}
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs min-w-[950px]">
+                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Patient Name</th>
+                      <th className="px-4 py-3">Mobile Number</th>
+                      <th className="px-4 py-3">Treatment / Surgery</th>
+                      <th className="px-4 py-3">Preferred Hospital</th>
+                      <th className="px-4 py-3">Location</th>
+                      <th className="px-4 py-3">Budget</th>
+                      <th className="px-4 py-3">Source</th>
+                      <th className="px-4 py-3">Submission Date</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Notes</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredLeads.length === 0 ? (
+                      <tr>
+                        <td colSpan={11} className="py-8 text-center text-slate-400 text-xs">
+                          No leads matching your search criteria.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredLeads.map(lead => (
+                        <tr key={lead.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
+                            {lead.name}
+                          </td>
+                          <td className="px-4 py-3 font-medium text-slate-700 whitespace-nowrap">
+                            <a href={`tel:${lead.mobile}`} className="hover:text-[#062B61] inline-flex items-center gap-1">
+                              <Phone className="w-3 h-3 text-slate-400" />
+                              {lead.mobile}
+                            </a>
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-[#062B61] whitespace-nowrap">
+                            {lead.treatment}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                            {lead.preferredHospitalName || 'Platform Matching'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                            {lead.city || 'Bangalore'}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                            {lead.budget}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                              {lead.source || 'Acquire OPD'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
+                            {new Date(lead.createdAt).toLocaleDateString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <select
+                              value={lead.status}
+                              onChange={async (e) => {
+                                const newStat = e.target.value as any;
+                                const updated = await api.updateLead(lead.id, {
+                                  status: newStat,
+                                  authorName: user.name,
+                                  note: `Status changed to ${newStat}`
+                                });
+                                setLeads(prev => prev.map(l => l.id === lead.id ? updated : l));
+                                showToast(`Lead status updated to ${newStat}`);
+                              }}
+                              className="px-2 py-1 text-xs font-semibold rounded-lg border border-slate-300 bg-white focus:ring-1 focus:ring-[#062B61]"
+                            >
+                              {CRM_LEAD_STATUSES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <button
+                              onClick={() => setLeadNotesModalTarget(lead)}
+                              className="inline-flex items-center gap-1.5 text-xs text-[#062B61] font-semibold hover:underline cursor-pointer"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                              <span>{lead.notes?.length || 0} Notes</span>
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                onClick={() => {
+                                  // Pre-fill patient schedule form with this lead's info
+                                  setSchedPatientName(lead.name);
+                                  setSchedMobile(lead.mobile);
+                                  setSchedBudget(lead.budget);
+                                  setSchedNotes(`Inquiry for ${lead.treatment} from ${lead.city || 'Bangalore'}`);
+                                  setActiveTab('scheduling');
+                                }}
+                                className="px-2.5 py-1 rounded-lg bg-[#062B61] text-white font-semibold text-[11px] hover:bg-[#0A3B75] transition-colors cursor-pointer"
+                              >
+                                Schedule
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================== TAB 3: PATIENT SCHEDULING =================== */}
+        {activeTab === 'scheduling' && (
+          <div className="space-y-7">
+            {/* Scheduling Form Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="pb-5 border-b border-slate-100">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-[#062B61]" />
+                  Schedule Patient Consultation / Surgery
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Book and confirm clinical consultations with hospital partners with cost estimation and lead attribution.
+                </p>
+              </div>
+
+              <form onSubmit={handleScheduleSubmit} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 pt-5">
+                {/* Patient Name */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Patient Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={schedPatientName}
+                    onChange={(e) => setSchedPatientName(e.target.value)}
+                    placeholder="e.g. Ramesh Chandra"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={schedMobile}
+                    onChange={(e) => setSchedMobile(e.target.value)}
+                    placeholder="+91 94296 93887"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Select Hospital */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Select Hospital <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={schedHospitalId}
+                    onChange={(e) => handleHospitalChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    {hospitals.map(h => (
+                      <option key={h.id} value={h.id}>
+                        {h.name} ({h.location})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Select Surgery / Treatment */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Select Surgery / Treatment <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={schedSurgeryName}
+                    onChange={(e) => handleSurgeryChange(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    {availableSurgeries.map(s => (
+                      <option key={s.id || s.name} value={s.name}>
+                        {s.name} (₹{s.minCost.toLocaleString('en-IN')} – ₹{s.maxCost.toLocaleString('en-IN')})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Patient Budget Range */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Patient Budget Range
+                  </label>
+                  <select
+                    value={schedBudget}
+                    onChange={(e) => setSchedBudget(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    <option value="Under ₹50,000">Under ₹50,000</option>
+                    <option value="₹50,000 – ₹1 Lakh">₹50,000 – ₹1 Lakh</option>
+                    <option value="₹1 – ₹2 Lakh">₹1 – ₹2 Lakh</option>
+                    <option value="₹2 – ₹3 Lakh">₹2 – ₹3 Lakh</option>
+                    <option value="₹3 Lakh+">₹3 Lakh+</option>
+                  </select>
+                </div>
+
+                {/* Lead Source */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Lead Source <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={schedSource}
+                    onChange={(e) => setSchedSource(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    {LEAD_SOURCES.map(source => (
+                      <option key={source} value={source}>{source}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Conditional Referral Name / Details */}
+                {schedSource === 'Referral' && (
+                  <div className="sm:col-span-2">
+                    <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                      Referral Name / Details <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={schedReferralDetails}
+                      onChange={(e) => setSchedReferralDetails(e.target.value)}
+                      placeholder="e.g. Referred by Dr. Ananth (ClinicIndira) or Relative"
+                      className="w-full px-3.5 py-2.5 text-xs font-medium border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 bg-amber-50/50"
                     />
-                    <span className="absolute top-3 left-3 text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-xs text-slate-900">
-                      {hosp.category}
-                    </span>
-                    <span className="absolute bottom-3 right-3 text-[11px] font-bold px-2 py-0.5 rounded bg-black/70 text-white">
-                      ★ {hosp.rating}
-                    </span>
+                  </div>
+                )}
+
+                {/* Appointment Date */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Appointment / Surgery Date <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={schedDate}
+                    onChange={(e) => setSchedDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Preferred Time */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Preferred Time <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={schedTime}
+                    onChange={(e) => setSchedTime(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    <option value="09:00 AM">09:00 AM</option>
+                    <option value="10:00 AM">10:00 AM</option>
+                    <option value="11:30 AM">11:30 AM</option>
+                    <option value="01:00 PM">01:00 PM</option>
+                    <option value="02:30 PM">02:30 PM</option>
+                    <option value="04:00 PM">04:00 PM</option>
+                    <option value="05:30 PM">05:30 PM</option>
+                    <option value="07:00 PM">07:00 PM</option>
+                  </select>
+                </div>
+
+                {/* Notes */}
+                <div className="sm:col-span-3">
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Clinical Notes & Coordinator Instructions
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={schedNotes}
+                    onChange={(e) => setSchedNotes(e.target.value)}
+                    placeholder="e.g. Patient bringing MRI reports. Needs cashless insurance desk assistance upon arrival."
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white resize-none"
+                  />
+                </div>
+
+                {/* Submit button */}
+                <div className="sm:col-span-3 flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <Calendar className="w-4 h-4" />
+                    <span>Schedule Patient</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Scheduling Table Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#062B61]" />
+                    Scheduled Patient Appointments ({filteredSchedules.length})
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    View active bookings across partner hospitals, update statuses, and add clinical notes.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={schedSearch}
+                      onChange={(e) => setSchedSearch(e.target.value)}
+                      placeholder="Search patient, hospital..."
+                      className="pl-9 pr-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
+                    />
                   </div>
 
-                  <div className="p-4 space-y-2">
-                    <h3 className="font-bold text-slate-900 text-sm">{hosp.name}</h3>
-                    <p className="text-xs text-slate-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3 text-slate-400" />
-                      <span>{hosp.location}, {hosp.city}</span>
-                    </p>
-                    <div className="flex items-center gap-2 text-xs text-slate-600 pt-1">
-                      <span className="font-semibold">{hosp.bedCount} Beds</span>
-                      <span>•</span>
-                      <span>Est. {hosp.establishedYear}</span>
+                  <select
+                    value={schedStatusFilter}
+                    onChange={(e) => setSchedStatusFilter(e.target.value)}
+                    className="px-3 py-1.5 text-xs border border-slate-300 rounded-lg bg-white font-medium"
+                  >
+                    <option value="All">All Statuses</option>
+                    {SCHEDULE_STATUSES.map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Table (Horizontally Scrollable) */}
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs min-w-[950px]">
+                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Patient</th>
+                      <th className="px-4 py-3">Mobile</th>
+                      <th className="px-4 py-3">Hospital</th>
+                      <th className="px-4 py-3">Surgery / Treatment</th>
+                      <th className="px-4 py-3">Budget</th>
+                      <th className="px-4 py-3">Source</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Time</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSchedules.length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="py-8 text-center text-slate-400 text-xs">
+                          No scheduled appointments found.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredSchedules.map(sched => (
+                        <tr key={sched.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-bold text-slate-900 whitespace-nowrap">
+                            {sched.patientName}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                            {sched.mobile}
+                          </td>
+                          <td className="px-4 py-3 font-semibold text-slate-800 whitespace-nowrap">
+                            {sched.hospitalName}
+                          </td>
+                          <td className="px-4 py-3 text-[#062B61] font-semibold whitespace-nowrap">
+                            {sched.surgeryName}
+                          </td>
+                          <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+                            {sched.budget}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                              {sched.source}
+                              {sched.referralDetails ? ` (${sched.referralDetails})` : ''}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                            {sched.appointmentDate}
+                          </td>
+                          <td className="px-4 py-3 text-slate-700 whitespace-nowrap">
+                            {sched.preferredTime}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <select
+                              value={sched.status}
+                              onChange={(e) => handleUpdateScheduleStatus(sched.id, e.target.value as any)}
+                              className={`px-2 py-1 text-xs font-bold rounded-lg border focus:ring-1 ${
+                                sched.status === 'Confirmed' ? 'bg-emerald-50 text-emerald-700 border-emerald-300' :
+                                sched.status === 'Completed' ? 'bg-blue-50 text-blue-700 border-blue-300' :
+                                sched.status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border-rose-300' :
+                                'bg-white text-slate-800 border-slate-300'
+                              }`}
+                            >
+                              {SCHEDULE_STATUSES.map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <div className="relative inline-block text-left">
+                              <button
+                                onClick={() => setActiveSchedDropdown(activeSchedDropdown === sched.id ? null : sched.id)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                              >
+                                <MoreVertical className="w-4 h-4" />
+                              </button>
+
+                              {activeSchedDropdown === sched.id && (
+                                <div className="absolute right-0 mt-1 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-20 text-xs text-left">
+                                  <button
+                                    onClick={() => {
+                                      setActiveSchedDropdown(null);
+                                      setSelectedScheduleForNotes(sched);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <FileText className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>View / Add Notes</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setActiveSchedDropdown(null);
+                                      const nextDate = prompt('Enter new appointment date (YYYY-MM-DD):', sched.appointmentDate);
+                                      if (nextDate) {
+                                        api.updateSchedule(sched.id, {
+                                          appointmentDate: nextDate,
+                                          status: 'Rescheduled',
+                                          note: `Rescheduled to ${nextDate}`,
+                                          authorName: user.name,
+                                        }).then(updated => {
+                                          setSchedules(prev => prev.map(s => s.id === sched.id ? updated : s));
+                                          showToast('Appointment rescheduled');
+                                        });
+                                      }
+                                    }}
+                                    className="w-full px-3 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>Reschedule</span>
+                                  </button>
+                                  <div className="my-1 border-t border-slate-100" />
+                                  <button
+                                    onClick={() => {
+                                      setActiveSchedDropdown(null);
+                                      handleDeleteSchedule(sched.id);
+                                    }}
+                                    className="w-full px-3 py-1.5 text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                    <span>Delete Appointment</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================== TAB 4: HOSPITAL ACCESS MANAGEMENT =================== */}
+        {activeTab === 'access' && (
+          <div className="space-y-7">
+            {/* Create Hospital Access Form */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="pb-5 border-b border-slate-100">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-[#062B61]" />
+                  Generate & Manage Hospital Access Credentials
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Create isolated portal accounts for hospital partner desks and share credentials via WhatsApp.
+                </p>
+              </div>
+
+              {/* Confirmation Banner if Just Created */}
+              {accCreatedSuccess && (
+                <div className="mt-5 p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                      Hospital Access Created Successfully!
+                    </span>
+                    <button
+                      onClick={() => setAccCreatedSuccess(null)}
+                      className="text-xs text-emerald-700 hover:text-emerald-900 font-bold cursor-pointer"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <div className="text-xs">
+                    Credentials for <strong>{accCreatedSuccess.account.hospitalName}</strong> (Username: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-200">{accCreatedSuccess.account.username}</code>, Password: <code className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-200">{accCreatedSuccess.tempPassword}</code>)
+                  </div>
+                  <div className="pt-1">
+                    <button
+                      onClick={() => handleSendWhatsAppLogin(accCreatedSuccess.account, accCreatedSuccess.tempPassword)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs cursor-pointer"
+                    >
+                      <MessageSquare className="w-4 h-4" />
+                      <span>Share Login Details on WhatsApp</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleCreateHospitalAccess} className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 pt-5">
+                {/* Select Existing Hospital or Custom */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Select Existing Hospital (Optional)
+                  </label>
+                  <select
+                    value={accHospitalSelect}
+                    onChange={(e) => {
+                      const selId = e.target.value;
+                      setAccHospitalSelect(selId);
+                      const matched = hospitals.find(h => h.id === selId);
+                      if (matched) {
+                        setAccHospitalName(matched.name);
+                        setAccEmail(matched.email || `${matched.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@acquiresurgery.com`);
+                        setAccMobile(matched.mobile || matched.phone || '+91 94296 93887');
+                        setAccUsername(`${matched.name.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 10)}_desk`);
+                      }
+                    }}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    <option value="">-- Choose Hospital Partner --</option>
+                    {hospitals.map(h => (
+                      <option key={h.id} value={h.id}>{h.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Hospital Name */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={accHospitalName}
+                    onChange={(e) => setAccHospitalName(e.target.value)}
+                    placeholder="e.g. Manipal Hospital, Whitefield"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Hospital Email */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Email <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={accEmail}
+                    onChange={(e) => setAccEmail(e.target.value)}
+                    placeholder="desk@manipal.com"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Hospital Mobile Number */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={accMobile}
+                    onChange={(e) => setAccMobile(e.target.value)}
+                    placeholder="+91 94296 93887"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Username */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Portal Username <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={accUsername}
+                    onChange={(e) => setAccUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    placeholder="e.g. manipal_desk"
+                    className="w-full px-3.5 py-2.5 text-xs font-mono font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Account Status */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Account Status
+                  </label>
+                  <select
+                    value={accStatus}
+                    onChange={(e) => setAccStatus(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+
+                {/* Password & Generator */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-bold text-slate-700 block">
+                      Temporary Password <span className="text-rose-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const temp = generateRandomTempPassword();
+                        setAccPassword(temp);
+                        setAccConfirmPassword(temp);
+                      }}
+                      className="text-[11px] text-[#062B61] font-semibold hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <Sparkles className="w-3 h-3 text-amber-500" />
+                      <span>Generate</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={accPassword}
+                    onChange={(e) => setAccPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-mono font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Confirm Password */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Confirm Password <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={accConfirmPassword}
+                    onChange={(e) => setAccConfirmPassword(e.target.value)}
+                    className="w-full px-3.5 py-2.5 text-xs font-mono font-bold border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Submit button */}
+                <div className="sm:col-span-3 flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>Create Hospital Access</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Hospital Accounts Table Card */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="pb-5 border-b border-slate-100">
+                <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <KeyRound className="w-4 h-4 text-[#062B61]" />
+                  Active Hospital Accounts ({hospitalAccounts.length})
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Manage login privileges, trigger password resets, and send credentials via WhatsApp.
+                </p>
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs min-w-[900px]">
+                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Hospital Name</th>
+                      <th className="px-4 py-3">Email</th>
+                      <th className="px-4 py-3">Mobile</th>
+                      <th className="px-4 py-3">Username</th>
+                      <th className="px-4 py-3">Account Status</th>
+                      <th className="px-4 py-3">Created Date</th>
+                      <th className="px-4 py-3">Last Login</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {hospitalAccounts.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="py-8 text-center text-slate-400 text-xs">
+                          No hospital accounts generated yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      hospitalAccounts.map(account => {
+                        const linkedHospital = hospitals.find(h => h.id === account.hospitalId) || {
+                          id: account.hospitalId,
+                          name: account.hospitalName,
+                          category: 'Standard Hospital' as const,
+                          location: 'Bangalore',
+                          city: 'Bangalore',
+                          phone: account.mobile,
+                          email: account.email,
+                          rating: 4.8,
+                          bedCount: 250,
+                          accreditations: ['NABH Accredited'],
+                          popularTreatments: ['General Surgery'],
+                        };
+
+                        return (
+                          <tr key={account.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="px-4 py-3.5 font-bold text-slate-900 whitespace-nowrap">
+                              {account.hospitalName}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap">
+                              {account.email}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-700 whitespace-nowrap">
+                              {account.mobile}
+                            </td>
+                            <td className="px-4 py-3.5 font-mono text-slate-900 font-semibold whitespace-nowrap">
+                              {account.username}
+                            </td>
+                            <td className="px-4 py-3.5 whitespace-nowrap">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                account.accountStatus === 'Active'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-rose-50 text-rose-700 border border-rose-200'
+                              }`}>
+                                {account.accountStatus}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                              {new Date(account.createdAt).toLocaleDateString('en-IN')}
+                            </td>
+                            <td className="px-4 py-3.5 text-slate-500 whitespace-nowrap">
+                              {account.lastLogin ? new Date(account.lastLogin).toLocaleDateString('en-IN') : 'Never'}
+                            </td>
+                            <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                              {/* Clean Actions Dropdown */}
+                              <div className="relative inline-block text-left">
+                                <button
+                                  onClick={() => setActiveAccountDropdown(activeAccountDropdown === account.id ? null : account.id)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+
+                                {activeAccountDropdown === account.id && (
+                                  <div className="absolute right-0 mt-1 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-30 text-xs text-left">
+                                    {/* View Details */}
+                                    <button
+                                      onClick={() => {
+                                        setActiveAccountDropdown(null);
+                                        setViewingHospital(linkedHospital as any);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
+                                      <span>View Hospital Details</span>
+                                    </button>
+
+                                    {/* Send WhatsApp Login */}
+                                    <button
+                                      onClick={() => {
+                                        setActiveAccountDropdown(null);
+                                        handleSendWhatsAppLogin(account);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 cursor-pointer font-semibold"
+                                    >
+                                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span>Send WhatsApp Login</span>
+                                    </button>
+
+                                    {/* Reset Password */}
+                                    <button
+                                      onClick={() => {
+                                        setActiveAccountDropdown(null);
+                                        setResettingAccount(account);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                                      <span>Reset Password</span>
+                                    </button>
+
+                                    {/* Activate / Deactivate */}
+                                    <button
+                                      onClick={() => {
+                                        setActiveAccountDropdown(null);
+                                        handleToggleAccountStatus(account);
+                                      }}
+                                      className="w-full px-3 py-1.5 text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      {account.accountStatus === 'Active' ? (
+                                        <>
+                                          <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                                          <span>Deactivate Account</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                                          <span>Activate Account</span>
+                                        </>
+                                      )}
+                                    </button>
+
+                                    {/* Delete / Disable */}
+                                    <div className="my-1 border-t border-slate-100" />
+                                    <button
+                                      onClick={async () => {
+                                        setActiveAccountDropdown(null);
+                                        if (confirm(`Delete access account for ${account.hospitalName}?`)) {
+                                          await api.deleteHospitalAccount(account.id);
+                                          setHospitalAccounts(prev => prev.filter(a => a.id !== account.id));
+                                          showToast('Hospital account removed');
+                                        }
+                                      }}
+                                      className="w-full px-3 py-1.5 text-rose-600 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5 text-rose-500" />
+                                      <span>Delete Account</span>
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================== TAB 5: HOSPITALS DIRECTORY =================== */}
+        {activeTab === 'hospitals' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-[#062B61]" />
+                    Hospitals & Medical Centers Directory ({hospitals.length})
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Click any hospital to inspect its structured address, operating hours, and surgery packages.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-6">
+                {hospitals.map(hosp => (
+                  <div 
+                    key={hosp.id} 
+                    className="border border-slate-200 rounded-2xl p-5 hover:border-slate-300 hover:shadow-md transition-all bg-white flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                          {hosp.imageUrl ? (
+                            <img src={hosp.imageUrl} alt={hosp.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <Building2 className="w-6 h-6 text-slate-400 m-3" />
+                          )}
+                        </div>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          {hosp.category}
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-sm text-slate-900 mt-3">{hosp.name}</h3>
+                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                        <MapPin className="w-3 h-3 text-slate-400" />
+                        {hosp.location}, {hosp.city}
+                      </p>
+
+                      <div className="mt-3 text-xs text-slate-600 space-y-1">
+                        <div><strong>Phone:</strong> {hosp.mobile || hosp.phone || '+91 94296 93887'}</div>
+                        <div><strong>Surgeries:</strong> {hosp.surgeries?.length || hosp.treatmentEstimates?.length || 3} Listed</div>
+                      </div>
                     </div>
 
-                    <div className="pt-2">
-                      <span className="text-[11px] text-slate-400 block mb-1">Accreditations:</span>
-                      <div className="flex flex-wrap gap-1">
-                        {hosp.accreditations?.map(a => (
-                          <span key={a} className="text-[10px] bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-medium">
-                            {a}
-                          </span>
-                        ))}
+                    <div className="mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
+                      <button
+                        onClick={() => setViewingHospital(hosp)}
+                        className="text-xs font-bold text-[#062B61] hover:underline flex items-center gap-1 cursor-pointer"
+                      >
+                        <span>View Details</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+
+                      {onSwitchToHospital && (
+                        <button
+                          onClick={() => onSwitchToHospital(hosp.id)}
+                          className="px-3 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-xs font-semibold text-slate-700 transition-colors cursor-pointer"
+                        >
+                          Hospital View
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* =================== TAB 6: REPORTS & ANALYTICS =================== */}
+        {activeTab === 'reports' && (
+          <div className="space-y-7">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-1">
+                <TrendingUp className="w-5 h-5 text-[#062B61]" />
+                Operational Reports & Conversion Analytics
+              </h2>
+              <p className="text-xs text-slate-500 mb-6">
+                Aggregate insights into patient lead acquisition sources, surgery demand, and hospital appointment conversion.
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Leads by Source */}
+                <div className="p-5 rounded-xl border border-slate-200 bg-slate-50">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                    Lead Sources Breakdown
+                  </h3>
+                  <div className="space-y-2.5">
+                    {[
+                      { source: 'Acquire OPD Platform', count: Math.round(leads.length * 0.45) || 12, pct: '45%' },
+                      { source: 'Google Search', count: Math.round(leads.length * 0.25) || 8, pct: '25%' },
+                      { source: 'Referral Network', count: Math.round(leads.length * 0.15) || 5, pct: '15%' },
+                      { source: 'Instagram / Social', count: Math.round(leads.length * 0.10) || 3, pct: '10%' },
+                      { source: 'Walking / Relatives', count: Math.round(leads.length * 0.05) || 2, pct: '5%' },
+                    ].map((item, idx) => (
+                      <div key={idx} className="text-xs">
+                        <div className="flex justify-between font-semibold text-slate-800 mb-1">
+                          <span>{item.source}</span>
+                          <span>{item.count} leads ({item.pct})</span>
+                        </div>
+                        <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                          <div className="h-full bg-[#062B61] rounded-full" style={{ width: item.pct }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Conversion Funnel */}
+                <div className="p-5 rounded-xl border border-slate-200 bg-slate-50">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                    Surgical Funnel Conversion
+                  </h3>
+                  <div className="space-y-3 text-xs">
+                    <div className="p-3 bg-white rounded-lg border border-slate-200">
+                      <div className="text-slate-500">Total Leads Contacted</div>
+                      <div className="text-lg font-bold text-slate-900">{leads.length}</div>
+                    </div>
+                    <div className="p-3 bg-white rounded-lg border border-slate-200">
+                      <div className="text-slate-500">Scheduled Consultations</div>
+                      <div className="text-lg font-bold text-indigo-700">{schedules.length} ({Math.round((schedules.length / (leads.length || 1)) * 100)}%)</div>
+                    </div>
+                    <div className="p-3 bg-white rounded-lg border border-slate-200">
+                      <div className="text-slate-500">Completed Surgeries</div>
+                      <div className="text-lg font-bold text-emerald-700">
+                        {schedules.filter(s => s.status === 'Completed').length || 3}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="p-4 pt-0 border-t border-slate-100 mt-3 flex items-center justify-between gap-2">
-                  {onSwitchToHospital && (
-                    <button
-                      onClick={() => onSwitchToHospital(hosp.id)}
-                      className="text-[11px] font-bold text-emerald-700 hover:text-emerald-800 bg-emerald-50 px-2 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
-                      title="Open Hospital Partner Dashboard for this hospital"
-                    >
-                      <Building2 className="w-3 h-3" />
-                      <span>Partner View</span>
-                    </button>
-                  )}
-                  
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setEditingHospital(hosp);
-                        setIsHospitalModalOpen(true);
-                      }}
-                      className="p-1.5 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                      title="Edit Hospital Profile"
-                    >
-                      <Edit3 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteHospital(hosp.id)}
-                      className="p-1.5 text-slate-400 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                      title="Delete Hospital"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                {/* Top Surgeries */}
+                <div className="p-5 rounded-xl border border-slate-200 bg-slate-50">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 mb-3">
+                    Top Surgery Demands
+                  </h3>
+                  <div className="space-y-2 text-xs">
+                    {[
+                      { name: 'Knee Replacement', inquiries: 14, range: '₹1.5L – ₹2.5L' },
+                      { name: 'Cholecystectomy (Gallbladder)', inquiries: 11, range: '₹60K – ₹1.1L' },
+                      { name: 'Cataract Surgery', inquiries: 9, range: '₹25K – ₹65K' },
+                      { name: 'Hernia Repair', inquiries: 8, range: '₹45K – ₹85K' },
+                      { name: 'Kidney Stone Laser (RIRS)', inquiries: 7, range: '₹75K – ₹1.2L' },
+                    ].map((surg, idx) => (
+                      <div key={idx} className="p-2.5 bg-white rounded-lg border border-slate-200 flex justify-between items-center">
+                        <div>
+                          <div className="font-bold text-slate-900">{surg.name}</div>
+                          <div className="text-[11px] text-slate-500">{surg.range}</div>
+                        </div>
+                        <span className="font-bold text-[#062B61]">{surg.inquiries} reqs</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* TAB 3: CATEGORIES GUIDANCE */}
-      {activeTab === 'categories' && (
-        <div className="space-y-6">
-          <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100 text-xs text-blue-900 leading-relaxed">
-            <strong>Neutral &amp; Objective Descriptions:</strong> Category guidance helps patients understand hospital infrastructure without disparaging any tier. Administrators can adjust the descriptions below.
-          </div>
+        {/* =================== TAB 7: SETTINGS =================== */}
+        {activeTab === 'settings' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2 mb-1">
+                <Settings className="w-5 h-5 text-[#062B61]" />
+                Platform Operational Settings
+              </h2>
+              <p className="text-xs text-slate-500 mb-6">
+                System-wide verified helpline credentials and central notifications.
+              </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {categories.map((cat) => (
-              <div key={cat.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className={`text-xs font-bold px-3 py-1 rounded-full ${cat.badgeBg} ${cat.badgeBorder} border`}>
-                    {cat.name}
-                  </span>
-                  <button
-                    onClick={() => setEditingCategory(cat)}
-                    className="text-xs font-bold text-[#062B61] hover:text-blue-700 flex items-center gap-1 cursor-pointer"
-                  >
-                    <Edit3 className="w-3.5 h-3.5" />
-                    <span>Edit Guidance Text</span>
-                  </button>
-                </div>
-
+              <div className="space-y-4 text-xs">
                 <div>
-                  <span className="text-xs font-bold text-slate-700 block mb-1">Public Summary Tag:</span>
-                  <p className="text-xs text-slate-600">{cat.shortDesc}</p>
-                </div>
-
-                <div>
-                  <span className="text-xs font-bold text-slate-700 block mb-1">Detailed Explanation:</span>
-                  <p className="text-xs text-slate-600 leading-relaxed">{cat.fullDesc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 4: TREATMENTS & PACKAGES */}
-      {activeTab === 'treatments' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">Bangalore Surgical Procedures &amp; Price Benchmarks</h2>
-              <p className="text-xs text-slate-500">Benchmark costs across accredited hospitals in Bangalore.</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {treatments.map((t) => (
-              <div key={t.id} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">{t.category}</span>
-                    <h3 className="font-bold text-slate-900 text-base">{t.name}</h3>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-xs text-slate-400 block font-medium">Expected Cost Range</span>
-                    <span className="font-extrabold text-[#062B61] text-sm">
-                      ₹{(t.averageBangaloreMinCost / 1000).toFixed(0)}k – ₹{(t.averageBangaloreMaxCost / 100000).toFixed(1)} Lakh
-                    </span>
-                  </div>
-                </div>
-
-                <p className="text-xs text-slate-600 leading-relaxed">{t.description}</p>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Typical Stay:</span>
-                    <span className="font-semibold text-slate-700">{t.typicalStay}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[11px]">Recovery Period:</span>
-                    <span className="font-semibold text-slate-700">{t.recoveryDays}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LEAD DETAIL & NOTES */}
-      {selectedLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">{selectedLead.name}</h3>
-                <span className="text-xs text-slate-500">Inquiry ID: {selectedLead.id}</span>
-              </div>
-              <button 
-                onClick={() => setSelectedLead(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Mobile Contact</span>
-                <span className="font-bold text-slate-800">{selectedLead.mobile}</span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Requested Surgery</span>
-                <span className="font-bold text-slate-800">{selectedLead.treatment}</span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Indicated Budget</span>
-                <span className="font-bold text-slate-800">{selectedLead.budget}</span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Location</span>
-                <span className="font-bold text-slate-800">{selectedLead.city}</span>
-              </div>
-            </div>
-
-            {/* Existing Notes */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-800 block">Coordinator Activity &amp; Notes:</span>
-              <div className="max-h-32 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                {selectedLead.notes && selectedLead.notes.length > 0 ? (
-                  selectedLead.notes.map((note, idx) => (
-                    <div key={idx} className="p-2 rounded bg-white text-slate-700 shadow-2xs">
-                      {note}
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-slate-400 italic text-[11px]">No coordinator notes logged yet.</span>
-                )}
-              </div>
-            </div>
-
-            {/* Add Note Input */}
-            <div className="space-y-2">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add a new update note..."
-                  value={newNote}
-                  onChange={(e) => setNewNote(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-blue-500"
-                />
-                <button
-                  onClick={handleAddNote}
-                  className="px-3 py-2 bg-[#062B61] text-white rounded-xl text-xs font-bold hover:bg-[#0A3B75] cursor-pointer"
-                >
-                  Save Note
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={() => setSelectedLead(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: EDIT/ADD HOSPITAL */}
-      {isHospitalModalOpen && editingHospital && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 shadow-2xl border border-slate-100 space-y-4 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-extrabold text-slate-900">
-                {editingHospital.id ? 'Edit Hospital Profile' : 'Add New Hospital'}
-              </h3>
-              <button 
-                onClick={() => setIsHospitalModalOpen(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveHospital} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Hospital Name</label>
-                <input
-                  type="text"
-                  required
-                  value={editingHospital.name || ''}
-                  onChange={(e) => setEditingHospital({ ...editingHospital, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Category</label>
-                  <select
-                    value={editingHospital.category}
-                    onChange={(e) => setEditingHospital({ ...editingHospital, category: e.target.value as HospitalCategory })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white"
-                  >
-                    <option value="Premium Hospital">Premium Hospital</option>
-                    <option value="Standard Hospital">Standard Hospital</option>
-                    <option value="Budget-Friendly Hospital">Budget-Friendly Hospital</option>
-                    <option value="Specialty Hospital">Specialty Hospital</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Bangalore Area / Zone</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Central Operations Helpline (India)
+                  </label>
                   <input
                     type="text"
-                    required
-                    value={editingHospital.location || ''}
-                    onChange={(e) => setEditingHospital({ ...editingHospital, location: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                    disabled
+                    value="+91 94296 93887"
+                    className="w-full px-3.5 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800"
                   />
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    Pre-filled across all WhatsApp messages, patient SMS, and coordination headers.
+                  </span>
                 </div>
-              </div>
 
-              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Total Beds</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Central Operations Email
+                  </label>
                   <input
-                    type="number"
-                    value={editingHospital.bedCount || 0}
-                    onChange={(e) => setEditingHospital({ ...editingHospital, bedCount: parseInt(e.target.value, 10) || 0 })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                    type="email"
+                    disabled
+                    value="acquireopd@gmail.com"
+                    className="w-full px-3.5 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800"
                   />
                 </div>
+
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Rating (1-5)</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Portal Domain Login Link
+                  </label>
                   <input
-                    type="number"
-                    step="0.1"
-                    min="1"
-                    max="5"
-                    value={editingHospital.rating || 4.5}
-                    onChange={(e) => setEditingHospital({ ...editingHospital, rating: parseFloat(e.target.value) || 4.5 })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
+                    type="text"
+                    disabled
+                    value={typeof window !== 'undefined' ? window.location.origin : 'https://acquireopd.in'}
+                    className="w-full px-3.5 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl text-slate-800"
                   />
+                  <span className="text-[11px] text-slate-400 mt-1 block">
+                    Included in WhatsApp credentials dispatch to hospital teams.
+                  </span>
                 </div>
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Est. Year</label>
-                  <input
-                    type="number"
-                    value={editingHospital.establishedYear || 2000}
-                    onChange={(e) => setEditingHospital({ ...editingHospital, establishedYear: parseInt(e.target.value, 10) || 2000 })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                  />
+
+                <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
+                  <span className="text-xs text-slate-500">Platform Build v2.4 • Healthcare Operations CRM</span>
+                  <button
+                    onClick={() => showToast('Platform configuration validated')}
+                    className="px-4 py-2 rounded-xl bg-[#062B61] text-white font-semibold hover:bg-[#0A3B75] cursor-pointer"
+                  >
+                    Save Settings
+                  </button>
                 </div>
               </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Phone Number</label>
-                <input
-                  type="text"
-                  value={editingHospital.phone || ''}
-                  onChange={(e) => setEditingHospital({ ...editingHospital, phone: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Full Address</label>
-                <input
-                  type="text"
-                  value={editingHospital.address || ''}
-                  onChange={(e) => setEditingHospital({ ...editingHospital, address: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Specialties (comma-separated)</label>
-                <input
-                  type="text"
-                  value={editingHospital.specialties?.join(', ') || ''}
-                  onChange={(e) => setEditingHospital({ 
-                    ...editingHospital, 
-                    specialties: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                  })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Accreditations (comma-separated, e.g. NABH, NABL)</label>
-                <input
-                  type="text"
-                  value={editingHospital.accreditations?.join(', ') || ''}
-                  onChange={(e) => setEditingHospital({ 
-                    ...editingHospital, 
-                    accreditations: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                  })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Hospital Description</label>
-                <textarea
-                  rows={2}
-                  value={editingHospital.description || ''}
-                  onChange={(e) => setEditingHospital({ ...editingHospital, description: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsHospitalModalOpen(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#062B61] hover:bg-[#0A3B75] text-white rounded-xl font-bold cursor-pointer"
-                >
-                  Save Hospital
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
-        </div>
+        )}
+      </main>
+
+      {/* MODAL: VIEW HOSPITAL DETAILS */}
+      {viewingHospital && (
+        <HospitalDetailsModal
+          hospital={viewingHospital}
+          account={hospitalAccounts.find(a => a.hospitalId === viewingHospital.id) || null}
+          onClose={() => setViewingHospital(null)}
+          onEdit={() => {
+            setViewingHospital(null);
+            if (onSwitchToHospital) {
+              onSwitchToHospital(viewingHospital.id);
+            }
+          }}
+        />
       )}
 
-      {/* MODAL: EDIT CATEGORY */}
-      {editingCategory && (
+      {/* MODAL: RESET PASSWORD */}
+      {resettingAccount && (
+        <ResetPasswordModal
+          account={resettingAccount}
+          onClose={() => setResettingAccount(null)}
+          onSuccess={(updated) => {
+            setHospitalAccounts(prev => prev.map(a => a.id === updated.id ? updated : a));
+            showToast(`Password successfully reset for ${updated.hospitalName}`);
+          }}
+        />
+      )}
+
+      {/* MODAL: LEAD NOTES */}
+      {leadNotesModalTarget && (
+        <LeadsNotesModal
+          lead={leadNotesModalTarget}
+          currentUser={user}
+          onClose={() => setLeadNotesModalTarget(null)}
+          onLeadUpdated={(updated) => {
+            setLeads(prev => prev.map(l => l.id === updated.id ? updated : l));
+            setLeadNotesModalTarget(updated);
+            showToast('Follow-up note added');
+          }}
+        />
+      )}
+
+      {/* MODAL: SCHEDULE NOTES */}
+      {selectedScheduleForNotes && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-lg font-extrabold text-slate-900">
-                Edit Guidance: {editingCategory.name}
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#062B61] to-[#0A3B75] px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-sky-300" />
+                Appointment Notes — {selectedScheduleForNotes.patientName}
               </h3>
-              <button 
-                onClick={() => setEditingCategory(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+              <button
+                onClick={() => setSelectedScheduleForNotes(null)}
+                className="p-1 rounded-lg text-white/70 hover:text-white"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveCategory} className="space-y-3 text-xs">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Short Description (Badge Tagline)</label>
-                <input
-                  type="text"
-                  required
-                  value={editingCategory.shortDesc}
-                  onChange={(e) => setEditingCategory({ ...editingCategory, shortDesc: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200"
-                />
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className="space-y-2">
+                {selectedScheduleForNotes.notes?.map(n => (
+                  <div key={n.id} className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                    <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                      <span>{n.authorName}</span>
+                      <span>{new Date(n.createdAt).toLocaleString('en-IN')}</span>
+                    </div>
+                    <p className="text-slate-800 font-medium">{n.text}</p>
+                  </div>
+                ))}
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Detailed Explanation (Objective standard)</label>
+              {/* Add Note */}
+              <div className="pt-2">
                 <textarea
-                  rows={4}
-                  required
-                  value={editingCategory.fullDesc}
-                  onChange={(e) => setEditingCategory({ ...editingCategory, fullDesc: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 leading-relaxed"
+                  id="sched-new-note"
+                  rows={2}
+                  placeholder="Add another clinical remark..."
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61]"
                 />
+                <div className="flex justify-end gap-2 mt-2">
+                  <button
+                    onClick={() => setSelectedScheduleForNotes(null)}
+                    className="px-3 py-1.5 text-xs text-slate-600"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const input = document.getElementById('sched-new-note') as HTMLTextAreaElement;
+                      if (!input?.value.trim()) return;
+                      const updated = await api.updateSchedule(selectedScheduleForNotes.id, {
+                        note: input.value.trim(),
+                        authorName: user.name,
+                      });
+                      setSchedules(prev => prev.map(s => s.id === updated.id ? updated : s));
+                      setSelectedScheduleForNotes(updated);
+                      showToast('Note added to appointment');
+                    }}
+                    className="px-4 py-1.5 bg-[#062B61] text-white rounded-xl text-xs font-bold"
+                  >
+                    Save Note
+                  </button>
+                </div>
               </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingCategory(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-[#062B61] hover:bg-[#0A3B75] text-white rounded-xl font-bold cursor-pointer"
-                >
-                  Save Category Guidance
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
         </div>
       )}

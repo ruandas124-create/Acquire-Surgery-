@@ -3,44 +3,57 @@ import {
   AuthUser, 
   Hospital, 
   Lead, 
-  TreatmentEstimate, 
-  HospitalCapacityStatus 
+  HospitalSurgery, 
+  HospitalOperatingHour,
+  HospitalAddress,
+  DayOfWeek,
+  HospitalCapacityStatus
 } from '../../types';
 import { api } from '../../services/api';
+import { authService } from '../../services/auth';
+import { 
+  getHospitalAddress, 
+  getHospitalOperatingHours, 
+  getHospitalSurgeries,
+  DAYS_OF_WEEK
+} from '../../data/crmData';
 import { 
   Building2, 
+  FileText, 
+  Clock, 
+  MapPin, 
+  Plus, 
+  Edit3, 
+  Trash2, 
+  CheckCircle2, 
+  XCircle, 
+  Save, 
+  IndianRupee, 
+  ShieldCheck, 
+  LogOut, 
+  KeyRound, 
   Users, 
   Bed, 
   Activity, 
-  Phone, 
-  MessageSquare, 
-  CheckCircle2, 
-  Clock, 
-  Calendar, 
-  FileText, 
-  Edit3, 
-  Plus, 
-  Save, 
-  X, 
-  IndianRupee, 
-  AlertCircle, 
-  ShieldCheck, 
-  LogOut, 
-  RefreshCw, 
   Check, 
-  ArrowRight,
+  AlertCircle,
+  Eye,
+  EyeOff,
+  Sparkles,
+  Phone,
+  Mail,
   ExternalLink,
-  HeartPulse,
-  Award,
-  MapPin
+  ChevronRight,
+  Filter
 } from 'lucide-react';
+import { Logo } from '../Logo';
 
 interface HospitalDashboardProps {
   user: AuthUser;
   hospitals: Hospital[];
   onLogout: () => void;
   onClose: () => void;
-  onSwitchHospital: (hospitalId: string) => void;
+  onSwitchHospital?: (hospitalId: string) => void;
 }
 
 export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
@@ -48,35 +61,62 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
   hospitals,
   onLogout,
   onClose,
-  onSwitchHospital,
 }) => {
-  // Current hospital
+  // Find current hospital partner
   const currentHospitalId = user.hospitalId || hospitals[0]?.id || 'hosp-manipal-oar';
   const hospital = hospitals.find(h => h.id === currentHospitalId) || hospitals[0];
 
-  const [activeTab, setActiveTab] = useState<'leads' | 'profile' | 'packages' | 'capacity'>('leads');
-  const [allLeads, setAllLeads] = useState<Lead[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'profile' | 'surgeries' | 'hours' | 'leads' | 'capacity' | 'security'>('profile');
+  const [loading, setLoading] = useState(false);
 
-  // Filtered leads matching this hospital's specialties or preferred hospital
-  const [leadStatusFilter, setLeadStatusFilter] = useState<string>('All');
+  // Success / Error notification banner
+  const [successToast, setSuccessToast] = useState<string | null>(null);
+  const [errorToast, setErrorToast] = useState<string | null>(null);
+
+  // 1. Hospital Basic Info State
+  const [hospitalName, setHospitalName] = useState(hospital?.name || '');
+  const [imageUrl, setImageUrl] = useState(hospital?.imageUrl || '');
+  const [registrationNumber, setRegistrationNumber] = useState(hospital?.registrationNumber || 'REG-KA-2018-09412');
+  const [mobileNumber, setMobileNumber] = useState(hospital?.mobile || hospital?.phone || '+91 94296 93887');
+  const [emailAddress, setEmailAddress] = useState(hospital?.email || user.email || 'acquireopd@gmail.com');
+  const [category, setCategory] = useState(hospital?.category || 'Standard Hospital');
+  const [description, setDescription] = useState(hospital?.description || '');
+
+  // 2. Hospital Address State (Broken into separate fields)
+  const [addressLine1, setAddressLine1] = useState('');
+  const [addressLine2, setAddressLine2] = useState('');
+  const [stateName, setStateName] = useState('Karnataka');
+  const [cityName, setCityName] = useState('Bangalore');
+  const [areaLocality, setAreaLocality] = useState('');
+  const [pincode, setPincode] = useState('');
+
+  // 3. Hospital Operating Hours State (Monday through Sunday)
+  const [operatingHours, setOperatingHours] = useState<HospitalOperatingHour[]>([]);
+
+  // 4. Surgery & Treatment Management State
+  const [surgeries, setSurgeries] = useState<HospitalSurgery[]>([]);
+  const [surgeryModalOpen, setSurgeryModalOpen] = useState(false);
+  const [editingSurgeryId, setEditingSurgeryId] = useState<string | null>(null);
+  const [surgeryName, setSurgeryName] = useState('');
+  const [minCost, setMinCost] = useState('');
+  const [maxCost, setMaxCost] = useState('');
+  const [surgeryDesc, setSurgeryDesc] = useState('');
+  const [surgeryStatus, setSurgeryStatus] = useState<'Active' | 'Inactive'>('Active');
+
+  // 5. Change Password State
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+
+  // 6. Assigned Leads
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [newCoordinatorNote, setNewCoordinatorNote] = useState('');
+  const [noteText, setNoteText] = useState('');
 
-  // Hospital profile editing
-  const [editingProfile, setEditingProfile] = useState<Hospital | null>(null);
-  const [isProfileSaved, setIsProfileSaved] = useState(false);
-
-  // Hospital package editing
-  const [estimates, setEstimates] = useState<TreatmentEstimate[]>([]);
-  const [editingEstimate, setEditingEstimate] = useState<TreatmentEstimate | null>(null);
-  const [newProcedureName, setNewProcedureName] = useState('');
-  const [newMinCost, setNewMinCost] = useState('');
-  const [newMaxCost, setNewMaxCost] = useState('');
-  const [newNotes, setNewNotes] = useState('');
-  const [isAddingProcedure, setIsAddingProcedure] = useState(false);
-
-  // Capacity live status
+  // 7. Capacity
   const [capacity, setCapacity] = useState<HospitalCapacityStatus>({
     icuStatus: 'Available',
     generalBedsAvailable: Math.round((hospital?.bedCount || 200) * 0.15),
@@ -84,960 +124,1234 @@ export const HospitalDashboard: React.FC<HospitalDashboardProps> = ({
     acceptingReferrals: true,
     tpaDeskOpen: true,
   });
-  const [capacitySaved, setCapacitySaved] = useState(false);
 
+  // Load initial hospital data
   useEffect(() => {
     if (hospital) {
-      setEditingProfile(hospital);
-      setEstimates(hospital.treatmentEstimates || []);
-    }
-  }, [hospital]);
+      setHospitalName(hospital.name);
+      setImageUrl(hospital.imageUrl || '');
+      setRegistrationNumber(hospital.registrationNumber || 'REG-KA-2018-09412');
+      setMobileNumber(hospital.mobile || hospital.phone || '+91 94296 93887');
+      setEmailAddress(hospital.email || user.email || 'acquireopd@gmail.com');
+      setCategory(hospital.category);
+      setDescription(hospital.description || '');
 
-  const loadData = async () => {
+      // Load Address
+      const addr = getHospitalAddress(hospital);
+      setAddressLine1(addr.line1 || '');
+      setAddressLine2(addr.line2 || '');
+      setAreaLocality(addr.area || hospital.location || '');
+      setCityName(addr.city || 'Bangalore');
+      setStateName(addr.state || 'Karnataka');
+      setPincode(addr.pincode || '560001');
+
+      // Load Operating Hours
+      setOperatingHours(getHospitalOperatingHours(hospital));
+
+      // Load Surgeries
+      setSurgeries(getHospitalSurgeries(hospital));
+    }
+  }, [hospital, user.email]);
+
+  // Load leads
+  useEffect(() => {
+    const fetchLeads = async () => {
+      try {
+        const all = await api.getLeads();
+        // Filter leads relevant to this hospital
+        const relevant = all.filter(l => 
+          l.preferredHospitalId === hospital?.id || 
+          l.matchedHospitalIds?.includes(hospital?.id) ||
+          surgeries.some(s => s.name.toLowerCase().includes(l.treatment.toLowerCase()))
+        );
+        setLeads(relevant);
+      } catch (err) {
+        console.error('Error fetching hospital leads', err);
+      }
+    };
+    fetchLeads();
+  }, [hospital?.id, surgeries]);
+
+  // Show Toast
+  const notifySuccess = (msg: string) => {
+    setSuccessToast(msg);
+    setTimeout(() => setSuccessToast(null), 4000);
+  };
+
+  const notifyError = (msg: string) => {
+    setErrorToast(msg);
+    setTimeout(() => setErrorToast(null), 4000);
+  };
+
+  // Toggle day open/closed
+  const handleToggleDay = (day: DayOfWeek) => {
+    setOperatingHours(prev => prev.map(h => {
+      if (h.day === day) {
+        return { ...h, isOpen: !h.isOpen };
+      }
+      return h;
+    }));
+  };
+
+  // Change day timings
+  const handleTimeChange = (day: DayOfWeek, field: 'openTime' | 'closeTime', value: string) => {
+    setOperatingHours(prev => prev.map(h => {
+      if (h.day === day) {
+        return { ...h, [field]: value };
+      }
+      return h;
+    }));
+  };
+
+  // Save Hospital Profile & Address & Operating Hours
+  const handleSaveProfile = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
+
     try {
-      const leadsData = await api.getLeads();
-      setAllLeads(leadsData);
-    } catch (err) {
-      console.error('Error fetching leads for hospital portal', err);
+      const fullAddressString = `${addressLine1}${addressLine2 ? ', ' + addressLine2 : ''}, ${areaLocality}, ${cityName}, ${stateName} ${pincode}`;
+      
+      const updatedData: Partial<Hospital> = {
+        name: hospitalName,
+        imageUrl,
+        registrationNumber,
+        mobile: mobileNumber,
+        phone: mobileNumber,
+        email: emailAddress,
+        category,
+        description,
+        location: areaLocality,
+        city: cityName,
+        address: fullAddressString,
+        addressDetails: {
+          line1: addressLine1,
+          line2: addressLine2,
+          area: areaLocality,
+          city: cityName,
+          state: stateName,
+          pincode: pincode,
+        },
+        operatingHours,
+        surgeries,
+        treatmentEstimates: surgeries.map(s => ({
+          treatmentName: s.name,
+          minCost: s.minCost,
+          maxCost: s.maxCost,
+          notes: s.description,
+          status: s.status,
+        })),
+      };
+
+      await api.updateHospital(hospital.id, updatedData);
+      notifySuccess('Hospital profile and operational information updated successfully!');
+    } catch (err: any) {
+      notifyError(err?.message || 'Failed to update hospital profile.');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadData();
-  }, [currentHospitalId]);
-
-  // Relevant leads for this hospital:
-  // Matches if:
-  // 1. Matched hospital IDs includes this hospital
-  // 2. OR preferredHospitalId equals this hospital
-  // 3. OR this hospital provides treatment matching the lead's treatment
-  const relevantLeads = allLeads.filter(lead => {
-    if (!hospital) return true;
-    if (lead.preferredHospitalId === hospital.id) return true;
-    if (lead.matchedHospitalIds && lead.matchedHospitalIds.includes(hospital.id)) return true;
-    
-    // Check if hospital specialties or treatment estimates match
-    const leadTreatment = (lead.treatment || '').toLowerCase();
-    const hasSpecialty = hospital.specialties?.some(s => leadTreatment.includes(s.toLowerCase()) || s.toLowerCase().includes(leadTreatment));
-    const hasEstimate = hospital.treatmentEstimates?.some(t => t.treatmentName.toLowerCase().includes(leadTreatment));
-    return hasSpecialty || hasEstimate;
-  });
-
-  const filteredLeads = relevantLeads.filter(l => {
-    if (leadStatusFilter === 'All') return true;
-    return l.status === leadStatusFilter;
-  });
-
-  // Handle coordinator adding note to patient
-  const handleAddHospitalNote = async () => {
-    if (!selectedLead || !newCoordinatorNote.trim()) return;
-    const taggedNote = `[${hospital?.name || 'Hospital Coordinator'}]: ${newCoordinatorNote.trim()} (${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
-    try {
-      const updated = await api.updateLead(selectedLead.id, { note: taggedNote });
-      setAllLeads(prev => prev.map(l => l.id === selectedLead.id ? updated : l));
-      setSelectedLead(updated);
-      setNewCoordinatorNote('');
-    } catch {
-      alert('Failed to log hospital coordinator note');
-    }
+  // Open Add Surgery Modal
+  const handleOpenAddSurgery = () => {
+    setEditingSurgeryId(null);
+    setSurgeryName('');
+    setMinCost('');
+    setMaxCost('');
+    setSurgeryDesc('');
+    setSurgeryStatus('Active');
+    setSurgeryModalOpen(true);
   };
 
-  // Update lead status from hospital desk
-  const handleUpdateLeadStatus = async (leadId: string, status: any) => {
-    try {
-      const updated = await api.updateLead(leadId, { status });
-      setAllLeads(prev => prev.map(l => l.id === leadId ? updated : l));
-      if (selectedLead?.id === leadId) setSelectedLead(updated);
-    } catch {
-      alert('Failed to update inquiry status');
-    }
+  // Open Edit Surgery Modal
+  const handleOpenEditSurgery = (surg: HospitalSurgery) => {
+    setEditingSurgeryId(surg.id);
+    setSurgeryName(surg.name);
+    setMinCost(surg.minCost.toString());
+    setMaxCost(surg.maxCost.toString());
+    setSurgeryDesc(surg.description || '');
+    setSurgeryStatus(surg.status);
+    setSurgeryModalOpen(true);
   };
 
-  // Save hospital profile
-  const handleSaveProfile = async (e: React.FormEvent) => {
+  // Save / Update Surgery
+  const handleSaveSurgery = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProfile || !hospital) return;
+    if (!surgeryName.trim()) {
+      notifyError('Surgery name is required');
+      return;
+    }
+    const min = parseInt(minCost.replace(/[^0-9]/g, ''), 10) || 10000;
+    const max = parseInt(maxCost.replace(/[^0-9]/g, ''), 10) || min * 1.5;
+
+    let updatedList: HospitalSurgery[];
+    if (editingSurgeryId) {
+      updatedList = surgeries.map(s => {
+        if (s.id === editingSurgeryId) {
+          return {
+            ...s,
+            name: surgeryName.trim(),
+            minCost: min,
+            maxCost: max,
+            description: surgeryDesc.trim(),
+            status: surgeryStatus,
+          };
+        }
+        return s;
+      });
+    } else {
+      const newSurg: HospitalSurgery = {
+        id: `surg-${Date.now()}`,
+        name: surgeryName.trim(),
+        minCost: min,
+        maxCost: max,
+        description: surgeryDesc.trim(),
+        status: surgeryStatus,
+      };
+      updatedList = [newSurg, ...surgeries];
+    }
+
+    setSurgeries(updatedList);
+    setSurgeryModalOpen(false);
+
+    // Persist to backend
     try {
-      await api.updateHospital(hospital.id, editingProfile);
-      setIsProfileSaved(true);
-      setTimeout(() => setIsProfileSaved(false), 3000);
+      await api.updateHospital(hospital.id, {
+        surgeries: updatedList,
+        treatmentEstimates: updatedList.map(s => ({
+          treatmentName: s.name,
+          minCost: s.minCost,
+          maxCost: s.maxCost,
+          notes: s.description,
+          status: s.status,
+        })),
+      });
+      notifySuccess(editingSurgeryId ? 'Surgery updated successfully!' : 'New surgery added successfully!');
     } catch {
-      alert('Failed to update hospital profile');
+      notifyError('Failed to persist surgery changes to server');
     }
   };
 
-  // Save procedure packages
-  const handleSavePackage = async (e: React.FormEvent) => {
+  // Toggle Surgery Status (Activate / Deactivate)
+  const handleToggleSurgeryStatus = async (surgId: string) => {
+    const updated = surgeries.map(s => {
+      if (s.id === surgId) {
+        const nextStatus: 'Active' | 'Inactive' = s.status === 'Active' ? 'Inactive' : 'Active';
+        return { ...s, status: nextStatus };
+      }
+      return s;
+    });
+    setSurgeries(updated);
+
+    try {
+      await api.updateHospital(hospital.id, {
+        surgeries: updated,
+        treatmentEstimates: updated.map(s => ({
+          treatmentName: s.name,
+          minCost: s.minCost,
+          maxCost: s.maxCost,
+          notes: s.description,
+          status: s.status,
+        })),
+      });
+      notifySuccess('Surgery status updated!');
+    } catch {
+      notifyError('Failed to update surgery status');
+    }
+  };
+
+  // Delete Surgery
+  const handleDeleteSurgery = async (surgId: string) => {
+    if (!confirm('Are you sure you want to remove this surgery from your hospital list?')) return;
+
+    const updated = surgeries.filter(s => s.id !== surgId);
+    setSurgeries(updated);
+
+    try {
+      await api.updateHospital(hospital.id, {
+        surgeries: updated,
+        treatmentEstimates: updated.map(s => ({
+          treatmentName: s.name,
+          minCost: s.minCost,
+          maxCost: s.maxCost,
+          notes: s.description,
+          status: s.status,
+        })),
+      });
+      notifySuccess('Surgery removed successfully');
+    } catch {
+      notifyError('Failed to remove surgery');
+    }
+  };
+
+  // Handle Change Password
+  const handleChangePassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProcedureName.trim() || !newMinCost || !newMaxCost || !hospital) return;
-    const newEst: TreatmentEstimate = {
-      treatmentName: newProcedureName.trim(),
-      minCost: parseInt(newMinCost, 10),
-      maxCost: parseInt(newMaxCost, 10),
-      notes: newNotes.trim() || undefined,
-    };
-    const updatedList = [...estimates, newEst];
-    setEstimates(updatedList);
-    try {
-      await api.updateHospital(hospital.id, { treatmentEstimates: updatedList });
-      setIsAddingProcedure(false);
-      setNewProcedureName('');
-      setNewMinCost('');
-      setNewMaxCost('');
-      setNewNotes('');
-    } catch {
-      alert('Failed to add package');
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (newPassword.length < 6) {
+      setPasswordError('New password must be at least 6 characters');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirm password do not match');
+      return;
+    }
+
+    const res = authService.changePassword(hospital.id, currentPassword, newPassword);
+    if (res.success) {
+      setPasswordSuccess('Password successfully changed! Use your new password on your next login.');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      notifySuccess('Password updated successfully');
+    } else {
+      setPasswordError(res.error || 'Failed to change password');
     }
   };
-
-  const handleDeletePackage = async (procName: string) => {
-    if (!hospital || !confirm(`Remove package estimate for ${procName}?`)) return;
-    const updatedList = estimates.filter(e => e.treatmentName !== procName);
-    setEstimates(updatedList);
-    try {
-      await api.updateHospital(hospital.id, { treatmentEstimates: updatedList });
-    } catch {
-      alert('Failed to remove package');
-    }
-  };
-
-  // Save capacity status
-  const handleSaveCapacity = () => {
-    setCapacitySaved(true);
-    setTimeout(() => setCapacitySaved(false), 3000);
-  };
-
-  if (!hospital) {
-    return (
-      <div className="py-12 text-center text-slate-500">
-        No hospital found. Please select a hospital from the portal login.
-      </div>
-    );
-  }
 
   return (
-    <div id="acquire-hospital-dashboard" className="py-6 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Top Banner with Hospital Identity */}
-      <div className="bg-gradient-to-r from-emerald-900 via-teal-900 to-slate-900 text-white p-6 sm:p-7 rounded-3xl mb-8 shadow-xl">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-5">
-          <div>
-            <div className="flex flex-wrap items-center gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-xs font-bold border border-emerald-400/30">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+    <div id="acquire-hospital-crm" className="min-h-screen bg-slate-100 flex flex-col">
+      {/* Top Professional Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-xs">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Logo size="sm" showTagline={false} />
+            <div className="h-6 w-px bg-slate-200 hidden sm:block" />
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-[#062B61] text-white">
                 Hospital Partner Portal
               </span>
-              <span className="text-xs px-2.5 py-0.5 rounded-md bg-white/10 text-cyan-200 font-medium">
-                {hospital.category}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-md bg-amber-400/20 text-amber-300 font-bold">
-                ★ {hospital.rating} Rating
+              <span className="text-xs text-slate-500 font-semibold hidden md:inline">
+                {hospital.name}
               </span>
             </div>
-
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2">
-              <span>{hospital.name}</span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 flex items-center gap-1.5">
-              <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-              <span>{hospital.address || `${hospital.location}, Bangalore`}</span>
-            </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Hospital Switcher for Demonstration & Testing */}
-            <div className="relative">
-              <label className="text-[10px] uppercase font-bold text-slate-300 block mb-1">
-                Switch Hospital Desk:
-              </label>
-              <select
-                value={hospital.id}
-                onChange={(e) => onSwitchHospital(e.target.value)}
-                className="bg-white/10 hover:bg-white/15 border border-white/20 text-white text-xs font-bold py-1.5 px-3 rounded-xl focus:ring-2 focus:ring-emerald-400 transition-colors cursor-pointer"
-              >
-                {hospitals.map((h) => (
-                  <option key={h.id} value={h.id} className="text-slate-900 bg-white">
-                    {h.name} ({h.location})
-                  </option>
-                ))}
-              </select>
+          <div className="flex items-center gap-3">
+            <div className="text-right hidden sm:block">
+              <div className="text-xs font-bold text-slate-800">{user.name}</div>
+              <div className="text-[11px] text-slate-500">{hospital.location} Desk</div>
             </div>
 
-            {/* Coordinator Badge */}
-            <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-white/10 border border-white/15 text-left">
-              <div className="w-8 h-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs shadow-inner">
-                {user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-              </div>
-              <div className="text-xs">
-                <span className="font-bold block text-white">{user.name}</span>
-                <span className="text-[10px] text-emerald-300 block">{user.title || 'Patient Desk Coordinator'}</span>
-              </div>
-            </div>
-
-            {/* Refresh */}
-            <button
-              onClick={loadData}
-              className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
-              title="Refresh Inquiries"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            </button>
-
-            {/* Logout */}
             <button
               onClick={onLogout}
-              className="px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30 text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
-              title="Sign Out of Hospital Desk"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
             >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Log Out</span>
-            </button>
-
-            {/* Exit to Public Website */}
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-xl bg-white text-slate-900 text-xs font-bold hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              Exit to Website
+              <LogOut className="w-3.5 h-3.5 text-slate-500" />
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
 
-        {/* Real-time Status Badges Bar */}
-        <div className="mt-6 pt-5 border-t border-white/10 flex flex-wrap items-center gap-4 text-xs">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-300">ICU Capacity:</span>
-            <span className={`font-bold px-2 py-0.5 rounded-md ${
-              capacity.icuStatus === 'Available' ? 'bg-emerald-400/20 text-emerald-300' : 'bg-amber-400/20 text-amber-300'
-            }`}>
-              {capacity.icuStatus} ({Math.round((hospital.bedCount || 200) * 0.1)} ICU Beds)
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-300">Emergency &amp; Trauma:</span>
-            <span className="font-bold text-emerald-300 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5" />
-              24x7 Operational
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-slate-300">Cashless Insurance TPA Desk:</span>
-            <span className="font-bold text-cyan-300 flex items-center gap-1">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              Active ({hospital.insuranceCashless?.length || 5}+ Insurers)
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Hospital Metrics Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Referred Patient Leads</span>
-            <Users className="w-4 h-4 text-emerald-700" />
-          </div>
-          <span className="text-2xl font-black text-emerald-800 block">{relevantLeads.length}</span>
-          <span className="text-[11px] text-slate-500 font-semibold">
-            {relevantLeads.filter(l => l.status === 'New').length} pending coordinator response
-          </span>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Consultations in Progress</span>
-            <Calendar className="w-4 h-4 text-blue-600" />
-          </div>
-          <span className="text-2xl font-black text-[#062B61] block">
-            {relevantLeads.filter(l => l.status === 'Assistance in Progress' || l.status === 'Contacted').length}
-          </span>
-          <span className="text-[11px] text-blue-700 font-semibold">Scheduled at this hospital</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Total Bed Strength</span>
-            <Bed className="w-4 h-4 text-purple-600" />
-          </div>
-          <span className="text-2xl font-black text-slate-900 block">{hospital.bedCount}</span>
-          <span className="text-[11px] text-purple-700 font-semibold">Registered inpatient capacity</span>
-        </div>
-
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-xs font-medium">Surgical Packages Listed</span>
-            <IndianRupee className="w-4 h-4 text-amber-600" />
-          </div>
-          <span className="text-2xl font-black text-amber-700 block">{estimates.length}</span>
-          <span className="text-[11px] text-slate-500 font-semibold">Transparent procedure packages</span>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 mb-6 overflow-x-auto pb-1">
-        <button
-          onClick={() => setActiveTab('leads')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'leads'
-              ? 'border-b-2 border-emerald-700 text-emerald-800 bg-emerald-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Patient Referrals &amp; Inquiries ({relevantLeads.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'profile'
-              ? 'border-b-2 border-emerald-700 text-emerald-800 bg-emerald-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Hospital Profile &amp; Contact Info</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('packages')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'packages'
-              ? 'border-b-2 border-emerald-700 text-emerald-800 bg-emerald-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <IndianRupee className="w-4 h-4" />
-          <span>Surgery Packages &amp; Ward Rates ({estimates.length})</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('capacity')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs sm:text-sm font-bold transition-colors whitespace-nowrap cursor-pointer ${
-            activeTab === 'capacity'
-              ? 'border-b-2 border-emerald-700 text-emerald-800 bg-emerald-50/50'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <HeartPulse className="w-4 h-4" />
-          <span>Live Bed &amp; Department Status</span>
-        </button>
-      </div>
-
-      {/* TAB 1: PATIENT LEADS RELEVANT TO THIS HOSPITAL */}
-      {activeTab === 'leads' && (
-        <div className="space-y-6">
-          <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 text-xs text-emerald-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <strong>Hospital Coordination Desk:</strong> Showing patient inquiries in Bangalore seeking procedures performed at {hospital.name}. You can acknowledge patient requests, record OPD consultation appointments, and add coordinator notes.
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <span className="text-slate-500 font-medium">Filter Status:</span>
-              <select
-                value={leadStatusFilter}
-                onChange={(e) => setLeadStatusFilter(e.target.value)}
-                className="bg-white border border-emerald-200 rounded-lg px-2.5 py-1 text-xs font-bold text-emerald-900"
+        {/* Navigation Tabs */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto gap-1 border-t border-slate-100 no-scrollbar">
+          {[
+            { id: 'profile', label: 'Hospital Profile & Address', icon: Building2 },
+            { id: 'hours', label: 'Operating Hours', icon: Clock },
+            { id: 'surgeries', label: `Surgery & Treatments (${surgeries.length})`, icon: FileText },
+            { id: 'leads', label: `Patient Inquiries (${leads.length})`, icon: Users },
+            { id: 'capacity', label: 'Capacity & TPA Desk', icon: Bed },
+            { id: 'security', label: 'Change Password', icon: KeyRound },
+          ].map(tab => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
+                  isActive
+                    ? 'border-[#062B61] text-[#062B61] bg-blue-50/50'
+                    : 'border-transparent text-slate-600 hover:text-slate-900 hover:border-slate-300'
+                }`}
               >
-                <option value="All">All Referrals ({relevantLeads.length})</option>
-                <option value="New">New Unattended</option>
-                <option value="Contacted">Contacted</option>
-                <option value="Assistance in Progress">Consultation in Progress</option>
-                <option value="Hospital Selected">Selected Our Hospital</option>
-                <option value="Closed">Closed</option>
-              </select>
-            </div>
-          </div>
+                <Icon className={`w-4 h-4 ${isActive ? 'text-[#062B61]' : 'text-slate-400'}`} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </header>
 
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs sm:text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold uppercase text-[11px] tracking-wider">
-                  <tr>
-                    <th className="py-3.5 px-4">Patient Information</th>
-                    <th className="py-3.5 px-4">Required Surgery</th>
-                    <th className="py-3.5 px-4">Patient Budget</th>
-                    <th className="py-3.5 px-4">Date Inquired</th>
-                    <th className="py-3.5 px-4">Hospital Desk Status</th>
-                    <th className="py-3.5 px-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredLeads.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="py-12 text-center text-slate-400">
-                        No patient referrals currently under this status filter.
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredLeads.map((lead) => (
-                      <tr key={lead.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-900">{lead.name}</div>
-                          <div className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                            <Phone className="w-3 h-3 text-slate-400" />
-                            <span>{lead.mobile}</span>
-                          </div>
-                          {lead.preferredHospitalId === hospital.id && (
-                            <span className="inline-block text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-full mt-1">
-                              Directly Selected {hospital.name}
-                            </span>
-                          )}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded text-xs">
-                            {lead.treatment}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <span className="font-medium text-slate-700">
-                            {lead.budget}
-                          </span>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-slate-500 text-xs">
-                          {new Date(lead.createdAt).toLocaleDateString('en-IN', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric'
-                          })}
-                        </td>
-
-                        <td className="py-3.5 px-4">
-                          <select
-                            value={lead.status}
-                            onChange={(e) => handleUpdateLeadStatus(lead.id, e.target.value)}
-                            className={`text-xs font-bold rounded-lg border py-1 px-2.5 ${
-                              lead.status === 'New'
-                                ? 'bg-amber-50 text-amber-800 border-amber-200'
-                                : lead.status === 'Contacted'
-                                ? 'bg-blue-50 text-blue-800 border-blue-200'
-                                : lead.status === 'Assistance in Progress'
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : lead.status === 'Hospital Selected'
-                                ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                                : 'bg-slate-100 text-slate-600 border-slate-200'
-                            }`}
-                          >
-                            <option value="New">New Unattended</option>
-                            <option value="Contacted">Contacted by Hospital</option>
-                            <option value="Assistance in Progress">OPD / Estimate in Progress</option>
-                            <option value="Hospital Selected">Admission Confirmed</option>
-                            <option value="Closed">Discharged / Closed</option>
-                          </select>
-                        </td>
-
-                        <td className="py-3.5 px-4 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            <a
-                              href={`tel:${lead.mobile}`}
-                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                              title="Call Patient Directly"
-                            >
-                              <Phone className="w-3.5 h-3.5" />
-                            </a>
-                            <button
-                              onClick={() => setSelectedLead(lead)}
-                              className="text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-lg transition-colors cursor-pointer"
-                            >
-                              Details &amp; Notes
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {/* Notification Toast */}
+      {successToast && (
+        <div className="fixed top-20 right-6 z-50 bg-emerald-700 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-top-4">
+          <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
+          <span>{successToast}</span>
+        </div>
+      )}
+      {errorToast && (
+        <div className="fixed top-20 right-6 z-50 bg-rose-700 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-2.5 text-xs font-semibold animate-in fade-in slide-in-from-top-4">
+          <AlertCircle className="w-5 h-5 text-rose-200 shrink-0" />
+          <span>{errorToast}</span>
         </div>
       )}
 
-      {/* TAB 2: HOSPITAL PROFILE & CONTACT */}
-      {activeTab === 'profile' && editingProfile && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs max-w-4xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900">Hospital Institutional Profile</h2>
-              <p className="text-xs text-slate-500">Update verified hospital details, emergency contact numbers, and bed capacities.</p>
-            </div>
-            {isProfileSaved && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1 animate-fade-in">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Profile updated successfully!
-              </span>
-            )}
-          </div>
-
-          <form onSubmit={handleSaveProfile} className="space-y-4 text-xs sm:text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Official Hospital Name</label>
-                <input
-                  type="text"
-                  value={editingProfile.name || ''}
-                  onChange={(e) => setEditingProfile({ ...editingProfile, name: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-                />
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* TAB 1: HOSPITAL PROFILE & STRUCTURED ADDRESS */}
+        {activeTab === 'profile' && (
+          <form onSubmit={handleSaveProfile} className="space-y-6">
+            {/* Top Card: Basic Information */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-[#062B61]" />
+                    Hospital Basic Information
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Manage your hospital's public branding, official licensing, and verified contact points.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{loading ? 'Saving Changes...' : 'Save Changes'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveProfile()}
+                    disabled={loading}
+                    className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    Update Profile
+                  </button>
+                </div>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Location / Zone in Bangalore</label>
-                <input
-                  type="text"
-                  value={editingProfile.location || ''}
-                  onChange={(e) => setEditingProfile({ ...editingProfile, location: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 pt-6">
+                {/* Hospital Name */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Name <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={hospitalName}
+                    onChange={(e) => setHospitalName(e.target.value)}
+                    placeholder="e.g. Manipal Hospital, Old Airport Road"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Registration / License Number */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Registration / License Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={registrationNumber}
+                    onChange={(e) => setRegistrationNumber(e.target.value)}
+                    placeholder="e.g. REG-KA-2018-09412"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Profile Picture / Logo URL */}
+                <div className="sm:col-span-3">
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Profile Picture / Logo Image URL
+                  </label>
+                  <div className="flex gap-3 items-center">
+                    <div className="w-14 h-14 rounded-xl border border-slate-200 overflow-hidden shrink-0 bg-slate-50 flex items-center justify-center">
+                      {imageUrl ? (
+                        <img 
+                          src={imageUrl} 
+                          alt="Hospital Logo Preview" 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Building2 className="w-6 h-6 text-slate-400" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="url"
+                        value={imageUrl}
+                        onChange={(e) => setImageUrl(e.target.value)}
+                        placeholder="https://images.unsplash.com/photo-..."
+                        className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                      />
+                      <p className="text-[11px] text-slate-400 mt-1">
+                        High-resolution photo or facility banner shown to prospective patients.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile Number */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="tel"
+                      required
+                      value={mobileNumber}
+                      onChange={(e) => setMobileNumber(e.target.value)}
+                      placeholder="+91 94296 93887"
+                      className="w-full pl-9 pr-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Email Address */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Email Address <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={emailAddress}
+                      onChange={(e) => setEmailAddress(e.target.value)}
+                      placeholder="acquireopd@gmail.com"
+                      className="w-full pl-9 pr-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Hospital Tier / Category */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Facility Tier
+                  </label>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  >
+                    <option value="Premium Hospital">Premium Hospital (Advanced Robotic Suites)</option>
+                    <option value="Standard Hospital">Standard Hospital (NABH Multi-Specialty)</option>
+                    <option value="Budget-Friendly Hospital">Budget-Friendly Hospital (Affordable Care)</option>
+                    <option value="Specialty Hospital">Specialty Center of Excellence</option>
+                  </select>
+                </div>
+
+                {/* Description */}
+                <div className="sm:col-span-3">
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Hospital Overview & Clinical Highlights
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Briefly describe surgical strengths, key department heads, advanced ICUs, or special services..."
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
               </div>
             </div>
 
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Full Postal Address &amp; Landmarks</label>
-              <input
-                type="text"
-                value={editingProfile.address || ''}
-                onChange={(e) => setEditingProfile({ ...editingProfile, address: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Hospital Emergency Helpline</label>
-                <input
-                  type="text"
-                  value={editingProfile.phone || ''}
-                  onChange={(e) => setEditingProfile({ ...editingProfile, phone: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-                />
+            {/* Second Card: Hospital Address (Separate Fields Requirement) */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="pb-4 border-b border-slate-100">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <MapPin className="w-5 h-5 text-[#062B61]" />
+                  Hospital Physical Address
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Structured geographic details for route guidance and patient navigation. (Separate fields)
+                </p>
               </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Total Inpatient Beds</label>
-                <input
-                  type="number"
-                  value={editingProfile.bedCount || 0}
-                  onChange={(e) => setEditingProfile({ ...editingProfile, bedCount: parseInt(e.target.value, 10) || 0 })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 pt-5">
+                {/* Address Line 1 */}
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Address Line 1 <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={addressLine1}
+                    onChange={(e) => setAddressLine1(e.target.value)}
+                    placeholder="e.g. 98, HAL Old Airport Road"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Address Line 2 */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Address Line 2 (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    value={addressLine2}
+                    onChange={(e) => setAddressLine2(e.target.value)}
+                    placeholder="e.g. Near Leela Palace / Block 4"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Area / Locality */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Area / Locality <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={areaLocality}
+                    onChange={(e) => setAreaLocality(e.target.value)}
+                    placeholder="e.g. Kodihalli / Indiranagar"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* City */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    City <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cityName}
+                    onChange={(e) => setCityName(e.target.value)}
+                    placeholder="e.g. Bangalore"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* State */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    State <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={stateName}
+                    onChange={(e) => setStateName(e.target.value)}
+                    placeholder="e.g. Karnataka"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
+
+                {/* Pincode */}
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1.5">
+                    Pincode <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={pincode}
+                    onChange={(e) => setPincode(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="560017"
+                    className="w-full px-3.5 py-2.5 text-xs font-medium border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] focus:border-[#062B61] bg-white"
+                  />
+                </div>
               </div>
+            </div>
 
-              <div>
-                <label className="font-bold text-slate-700 block mb-1">Established Year</label>
-                <input
-                  type="number"
-                  value={editingProfile.establishedYear || 2000}
-                  onChange={(e) => setEditingProfile({ ...editingProfile, establishedYear: parseInt(e.target.value, 10) || 2000 })}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-                />
+            {/* Bottom Action Strip */}
+            <div className="flex items-center justify-between p-4 bg-white rounded-2xl border border-slate-200 shadow-xs">
+              <div className="text-xs text-slate-500">
+                All changes reflect directly across patient searches and referral matching.
               </div>
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Key Specialties Offered (comma separated)</label>
-              <input
-                type="text"
-                value={editingProfile.specialties?.join(', ') || ''}
-                onChange={(e) => setEditingProfile({
-                  ...editingProfile,
-                  specialties: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Hospital Accreditations (e.g. NABH, NABL, ISO)</label>
-              <input
-                type="text"
-                value={editingProfile.accreditations?.join(', ') || ''}
-                onChange={(e) => setEditingProfile({
-                  ...editingProfile,
-                  accreditations: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Approved Cashless Insurance &amp; TPAs</label>
-              <input
-                type="text"
-                value={editingProfile.insuranceCashless?.join(', ') || ''}
-                onChange={(e) => setEditingProfile({
-                  ...editingProfile,
-                  insuranceCashless: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
-                })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div>
-              <label className="font-bold text-slate-700 block mb-1">Hospital Profile &amp; Clinical Overview</label>
-              <textarea
-                rows={3}
-                value={editingProfile.description || ''}
-                onChange={(e) => setEditingProfile({ ...editingProfile, description: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm transition-colors shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Save Hospital Profile Changes</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{loading ? 'Saving...' : 'Save Changes'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveProfile()}
+                  disabled={loading}
+                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Update Profile
+                </button>
+              </div>
             </div>
           </form>
-        </div>
-      )}
+        )}
 
-      {/* TAB 3: SURGICAL PACKAGES & PRICING */}
-      {activeTab === 'packages' && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900">
-                Surgical Procedure Packages ({hospital.name})
-              </h2>
-              <p className="text-xs text-slate-500">
-                Transparent package estimates shown to Bangalore patients during their healthcare search.
-              </p>
-            </div>
-
-            <button
-              onClick={() => setIsAddingProcedure(true)}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-700 text-white text-xs font-bold rounded-xl hover:bg-emerald-800 transition-colors cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Procedure Package</span>
-            </button>
-          </div>
-
-          {/* Add Procedure Form Modal */}
-          {isAddingProcedure && (
-            <div className="bg-emerald-50/70 p-5 rounded-2xl border border-emerald-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="font-bold text-slate-900 text-sm">Add New Surgery Package Estimate</h3>
-                <button onClick={() => setIsAddingProcedure(false)} className="text-slate-400 hover:text-slate-600">
-                  <X className="w-4 h-4" />
+        {/* TAB 2: OPERATING HOURS (Monday through Sunday with toggles and timings) */}
+        {activeTab === 'hours' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-[#062B61]" />
+                    Hospital Operating Hours (Weekly Timings)
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Configure daily OPD schedules, admission desks, and emergency opening hours for each day of the week.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleSaveProfile()}
+                  disabled={loading}
+                  className="flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{loading ? 'Saving...' : 'Save Changes'}</span>
                 </button>
               </div>
 
-              <form onSubmit={handleSavePackage} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="divide-y divide-slate-100 mt-2">
+                {DAYS_OF_WEEK.map((day) => {
+                  const schedule = operatingHours.find(h => h.day === day) || {
+                    day,
+                    isOpen: true,
+                    openTime: '08:00 AM',
+                    closeTime: '08:00 PM'
+                  };
+
+                  return (
+                    <div 
+                      key={day} 
+                      className={`py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors ${
+                        schedule.isOpen ? 'bg-transparent' : 'bg-slate-50/70 opacity-80'
+                      }`}
+                    >
+                      {/* Day and Status Toggle */}
+                      <div className="flex items-center gap-4 min-w-[180px]">
+                        <button
+                          type="button"
+                          onClick={() => handleToggleDay(day)}
+                          className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer flex items-center ${
+                            schedule.isOpen ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                          }`}
+                        >
+                          <div className="w-4 h-4 rounded-full bg-white shadow-xs" />
+                        </button>
+                        <div>
+                          <span className="font-bold text-xs text-slate-900 block">{day}</span>
+                          <span className={`text-[11px] font-semibold ${schedule.isOpen ? 'text-emerald-700' : 'text-slate-400'}`}>
+                            {schedule.isOpen ? 'Open for Consultations' : 'Closed / Emergency Only'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Opening & Closing Timings */}
+                      {schedule.isOpen ? (
+                        <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-slate-500">From:</span>
+                            <input
+                              type="text"
+                              value={schedule.openTime}
+                              onChange={(e) => handleTimeChange(day, 'openTime', e.target.value)}
+                              placeholder="08:00 AM"
+                              className="w-28 px-3 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg text-slate-800 bg-white"
+                            />
+                          </div>
+                          <span className="text-slate-400 text-xs">—</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[11px] font-medium text-slate-500">To:</span>
+                            <input
+                              type="text"
+                              value={schedule.closeTime}
+                              onChange={(e) => handleTimeChange(day, 'closeTime', e.target.value)}
+                              placeholder="08:00 PM"
+                              className="w-28 px-3 py-1.5 text-xs font-semibold border border-slate-300 rounded-lg text-slate-800 bg-white"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-slate-400 italic">
+                          Closed for routine OPD appointments on {day}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-6 pt-5 border-t border-slate-100 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSaveProfile()}
+                  disabled={loading}
+                  className="px-6 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Save Weekly Timings
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: SURGERY & TREATMENT MANAGEMENT */}
+        {activeTab === 'surgeries' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Procedure Name</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., Gallbladder Laparoscopic"
-                    value={newProcedureName}
-                    onChange={(e) => setNewProcedureName(e.target.value)}
-                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300"
-                  />
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-[#062B61]" />
+                    Surgery & Treatment Management
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Maintain your hospital's active surgery packages, transparent price ranges, and procedure availability.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleOpenAddSurgery}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Surgery</span>
+                </button>
+              </div>
+
+              {/* Clean Table: Surgery | Cost Range | Status | Actions */}
+              <div className="mt-6 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Surgery / Treatment</th>
+                      <th className="px-4 py-3">Cost Range (₹)</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {surgeries.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-slate-400 text-xs">
+                          No surgeries configured yet. Click "Add Surgery" to publish your first treatment package.
+                        </td>
+                      </tr>
+                    ) : (
+                      surgeries.map(surg => (
+                        <tr key={surg.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3.5">
+                            <div className="font-bold text-slate-900 text-xs">{surg.name}</div>
+                            {surg.description && (
+                              <div className="text-[11px] text-slate-500 mt-0.5 max-w-md truncate">
+                                {surg.description}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="font-bold text-slate-900">
+                              ₹{surg.minCost.toLocaleString('en-IN')} – ₹{surg.maxCost.toLocaleString('en-IN')}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <button
+                              onClick={() => handleToggleSurgeryStatus(surg.id)}
+                              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold cursor-pointer transition-colors ${
+                                surg.status === 'Active'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                                  : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
+                              }`}
+                              title="Click to toggle status"
+                            >
+                              {surg.status === 'Active' ? <CheckCircle2 className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+                              <span>{surg.status}</span>
+                            </button>
+                          </td>
+                          <td className="px-4 py-3.5 text-right">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenEditSurgery(surg)}
+                                className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+                                title="Edit Surgery"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleToggleSurgeryStatus(surg.id)}
+                                className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 text-xs font-medium transition-colors cursor-pointer"
+                              >
+                                {surg.status === 'Active' ? 'Deactivate' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteSurgery(surg.id)}
+                                className="p-1 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                                title="Delete Surgery"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: PATIENT INQUIRIES & REFERRALS */}
+        {activeTab === 'leads' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Users className="w-5 h-5 text-[#062B61]" />
+                    Direct Inquiries & Matching Patients ({leads.length})
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Patients who selected {hospital.name} or matched your hospital's surgical departments.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3">Patient</th>
+                      <th className="px-4 py-3">Contact</th>
+                      <th className="px-4 py-3">Treatment</th>
+                      <th className="px-4 py-3">Budget</th>
+                      <th className="px-4 py-3">Date</th>
+                      <th className="px-4 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {leads.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                          No inquiries assigned at the moment. New patient submissions will appear here.
+                        </td>
+                      </tr>
+                    ) : (
+                      leads.map(lead => (
+                        <tr key={lead.id} className="hover:bg-slate-50/80">
+                          <td className="px-4 py-3.5 font-bold text-slate-900">
+                            {lead.name}
+                          </td>
+                          <td className="px-4 py-3.5 font-medium text-slate-700">
+                            {lead.mobile}
+                          </td>
+                          <td className="px-4 py-3.5 font-semibold text-[#062B61]">
+                            {lead.treatment}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-600">
+                            {lead.budget}
+                          </td>
+                          <td className="px-4 py-3.5 text-slate-500">
+                            {new Date(lead.createdAt).toLocaleDateString('en-IN')}
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                              {lead.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: CAPACITY & TPA DESK */}
+        {activeTab === 'capacity' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Bed className="w-5 h-5 text-[#062B61]" />
+                    Live Bed Capacity & TPA Status
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Signal real-time capacity and cashless readiness to the central patient coordination team.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => notifySuccess('Capacity status updated and broadcasted to platform navigators!')}
+                  className="px-5 py-2.5 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Save Capacity
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5 pt-6">
+                {/* ICU Status */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    ICU Capacity Status
+                  </label>
+                  <select
+                    value={capacity.icuStatus}
+                    onChange={(e) => setCapacity({ ...capacity, icuStatus: e.target.value as any })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                  >
+                    <option value="Available">Available (Beds ready for admissions)</option>
+                    <option value="Limited">Limited (1–2 critical beds left)</option>
+                    <option value="Full">Full (Diverting non-emergency)</option>
+                  </select>
                 </div>
 
-                <div>
-                  <label className="font-bold text-slate-700 block mb-1">Min Package (₹)</label>
+                {/* General Beds Available */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Available Surgical Beds
+                  </label>
                   <input
                     type="number"
+                    value={capacity.generalBedsAvailable}
+                    onChange={(e) => setCapacity({ ...capacity, generalBedsAvailable: parseInt(e.target.value, 10) || 0 })}
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
+                  />
+                </div>
+
+                {/* Emergency Desk */}
+                <div className="p-4 rounded-xl border border-slate-200 bg-slate-50 space-y-2">
+                  <label className="text-xs font-bold text-slate-700 block">
+                    Emergency & Trauma Desk
+                  </label>
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setCapacity({ ...capacity, emergencyActive: !capacity.emergencyActive })}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer ${
+                        capacity.emergencyActive ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
+                      }`}
+                    >
+                      {capacity.emergencyActive ? '24x7 Active' : 'Standby'}
+                    </button>
+                    <span className="text-xs text-slate-500">Trauma surgeon on duty</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: CHANGE PASSWORD */}
+        {activeTab === 'security' && (
+          <div className="max-w-lg mx-auto">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 sm:p-7">
+              <div className="pb-4 border-b border-slate-100">
+                <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                  <KeyRound className="w-5 h-5 text-[#062B61]" />
+                  Change Hospital Account Password
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Update your credentials for secure access to {hospital.name}'s portal.
+                </p>
+              </div>
+
+              {passwordSuccess && (
+                <div className="mt-4 p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{passwordSuccess}</span>
+                </div>
+              )}
+              {passwordError && (
+                <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{passwordError}</span>
+                </div>
+              )}
+
+              <form onSubmit={handleChangePassword} className="space-y-4 pt-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Current Password
+                  </label>
+                  <input
+                    type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="e.g., 85000"
-                    value={newMinCost}
-                    onChange={(e) => setNewMinCost(e.target.value)}
-                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
                   />
                 </div>
 
                 <div>
-                  <label className="font-bold text-slate-700 block mb-1">Max Package (₹)</label>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    New Password
+                  </label>
                   <input
-                    type="number"
+                    type={showPassword ? 'text' : 'password'}
                     required
-                    placeholder="e.g., 140000"
-                    value={newMaxCost}
-                    onChange={(e) => setNewMaxCost(e.target.value)}
-                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 6 characters"
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
                   />
                 </div>
 
-                <div className="sm:col-span-3">
-                  <label className="font-bold text-slate-700 block mb-1">Package Inclusions / Stay Details</label>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Confirm New Password
+                  </label>
                   <input
-                    type="text"
-                    placeholder="e.g., Includes 3 days stay, surgeon fee, standard consumables, pre-op ECG"
-                    value={newNotes}
-                    onChange={(e) => setNewNotes(e.target.value)}
-                    className="w-full px-3 py-2 bg-white rounded-xl border border-slate-300"
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Re-enter new password"
+                    className="w-full px-3.5 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
                   />
                 </div>
 
-                <div className="sm:col-span-3 flex justify-end gap-2 pt-2">
+                <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => setIsAddingProcedure(false)}
-                    className="px-3 py-1.5 bg-slate-200 text-slate-700 rounded-xl font-bold"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 cursor-pointer"
                   >
-                    Cancel
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-slate-400" />}
+                    <span>{showPassword ? 'Hide Passwords' : 'Show Passwords'}</span>
                   </button>
+                </div>
+
+                <div className="pt-3">
                   <button
                     type="submit"
-                    className="px-4 py-1.5 bg-emerald-700 text-white rounded-xl font-bold"
+                    className="w-full py-2.5 px-4 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
                   >
-                    Save Procedure
+                    Update Account Password
                   </button>
                 </div>
               </form>
             </div>
-          )}
-
-          {/* Procedure List */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {estimates.map((est, idx) => (
-              <div key={idx} className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-bold text-slate-900 text-sm">{est.treatmentName}</h4>
-                    <button
-                      onClick={() => handleDeletePackage(est.treatmentName)}
-                      className="text-slate-400 hover:text-rose-600 p-1 rounded transition-colors"
-                      title="Delete Package"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-baseline gap-2 mb-3">
-                    <span className="text-xl font-extrabold text-[#062B61]">
-                      ₹{(est.minCost / 1000).toFixed(0)}k – ₹{(est.maxCost / 1000).toFixed(0)}k
-                    </span>
-                    <span className="text-[11px] text-slate-400 font-medium">(Estimated Cost)</span>
-                  </div>
-
-                  {est.notes && (
-                    <p className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                      <strong>Inclusions:</strong> {est.notes}
-                    </p>
-                  )}
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-                  <span>Room Type: General to Single Deluxe</span>
-                  <span className="text-emerald-700 font-semibold">Live in Search Results</span>
-                </div>
-              </div>
-            ))}
           </div>
-        </div>
-      )}
+        )}
+      </main>
 
-      {/* TAB 4: LIVE BED & INFRASTRUCTURE STATUS */}
-      {activeTab === 'capacity' && (
-        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs max-w-3xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <div>
-              <h2 className="text-xl font-extrabold text-slate-900">Hospital Real-Time Operational Status</h2>
-              <p className="text-xs text-slate-500">Live operational availability reflected to patient coordinators and navigators.</p>
-            </div>
-            {capacitySaved && (
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200 flex items-center gap-1 animate-fade-in">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Live status updated!
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-5 text-xs sm:text-sm">
-            {/* ICU Status */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
-              <div>
-                <span className="font-bold text-slate-900 block">Intensive Care Unit (ICU) Capacity</span>
-                <span className="text-xs text-slate-500">Indicate whether emergency and post-op ICU beds are available.</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {(['Available', 'Limited', 'Full'] as const).map((st) => (
-                  <button
-                    key={st}
-                    onClick={() => setCapacity({ ...capacity, icuStatus: st })}
-                    className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                      capacity.icuStatus === st
-                        ? st === 'Available'
-                          ? 'bg-emerald-600 text-white shadow-xs'
-                          : st === 'Limited'
-                          ? 'bg-amber-500 text-white shadow-xs'
-                          : 'bg-rose-600 text-white shadow-xs'
-                        : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    {st}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Emergency Service */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
-              <div>
-                <span className="font-bold text-slate-900 block">24x7 Emergency &amp; Trauma Casualty</span>
-                <span className="text-xs text-slate-500">Active emergency trauma desk and on-duty resuscitation team.</span>
-              </div>
-              <button
-                onClick={() => setCapacity({ ...capacity, emergencyActive: !capacity.emergencyActive })}
-                className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                  capacity.emergencyActive ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
-                }`}
-              >
-                {capacity.emergencyActive ? 'Operational 24x7' : 'Casualty Diverting'}
-              </button>
-            </div>
-
-            {/* Insurance Desk */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
-              <div>
-                <span className="font-bold text-slate-900 block">Cashless Insurance / TPA Helpdesk</span>
-                <span className="text-xs text-slate-500">Pre-authorization desk open for immediate surgery queries.</span>
-              </div>
-              <button
-                onClick={() => setCapacity({ ...capacity, tpaDeskOpen: !capacity.tpaDeskOpen })}
-                className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                  capacity.tpaDeskOpen ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
-                }`}
-              >
-                {capacity.tpaDeskOpen ? 'Desk Open (Active)' : 'Desk Closed for Day'}
-              </button>
-            </div>
-
-            {/* Accepting Inquiries */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-4">
-              <div>
-                <span className="font-bold text-slate-900 block">Accepting Patient Surgery Referrals</span>
-                <span className="text-xs text-slate-500">Hospital is actively scheduling elective surgeries this week.</span>
-              </div>
-              <button
-                onClick={() => setCapacity({ ...capacity, acceptingReferrals: !capacity.acceptingReferrals })}
-                className={`px-4 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer ${
-                  capacity.acceptingReferrals ? 'bg-emerald-600 text-white' : 'bg-slate-300 text-slate-700'
-                }`}
-              >
-                {capacity.acceptingReferrals ? 'Accepting Patients' : 'Temporarily Paused'}
-              </button>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={handleSaveCapacity}
-                className="px-6 py-2.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs sm:text-sm transition-colors shadow-md flex items-center gap-2 cursor-pointer"
-              >
-                <Save className="w-4 h-4" />
-                <span>Broadcast Live Status Update</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: LEAD DETAIL & COORDINATOR NOTES */}
-      {selectedLead && (
+      {/* MODAL: ADD / EDIT SURGERY */}
+      {surgeryModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-5">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div>
-                <h3 className="text-lg font-extrabold text-slate-900">{selectedLead.name}</h3>
-                <span className="text-xs text-slate-500">Inquiry ID: {selectedLead.id}</span>
-              </div>
-              <button 
-                onClick={() => setSelectedLead(null)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#062B61] to-[#0A3B75] px-6 py-4 text-white flex items-center justify-between">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <FileText className="w-4 h-4 text-sky-300" />
+                {editingSurgeryId ? 'Edit Surgery / Treatment' : 'Add New Surgery / Treatment'}
+              </h3>
+              <button
+                onClick={() => setSurgeryModalOpen(false)}
+                className="p-1 rounded-lg text-white/70 hover:text-white hover:bg-white/10"
               >
-                <X className="w-5 h-5" />
+                <XCircle className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-xs">
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Mobile Contact</span>
-                <span className="font-bold text-slate-800 flex items-center gap-1">
-                  <Phone className="w-3 h-3 text-emerald-600" />
-                  {selectedLead.mobile}
-                </span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Surgical Requirement</span>
-                <span className="font-bold text-emerald-900">{selectedLead.treatment}</span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Indicated Budget</span>
-                <span className="font-bold text-slate-800">{selectedLead.budget}</span>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl">
-                <span className="text-slate-400 block mb-0.5">Current Status</span>
-                <span className="font-bold text-blue-800">{selectedLead.status}</span>
-              </div>
-            </div>
-
-            {/* Existing Notes */}
-            <div className="space-y-2">
-              <span className="text-xs font-bold text-slate-800 block">
-                Hospital Activity &amp; Coordinator Log:
-              </span>
-              <div className="max-h-36 overflow-y-auto space-y-1.5 p-2 bg-slate-50 rounded-xl border border-slate-100 text-xs">
-                {selectedLead.notes && selectedLead.notes.length > 0 ? (
-                  selectedLead.notes.map((note, idx) => (
-                    <div key={idx} className="p-2 rounded bg-white text-slate-700 shadow-2xs">
-                      {note}
-                    </div>
-                  ))
-                ) : (
-                  <span className="text-slate-400 italic text-[11px]">No notes logged yet.</span>
-                )}
-              </div>
-            </div>
-
-            {/* Add Coordinator Note */}
-            <div className="space-y-2">
-              <div className="flex gap-2">
+            <form onSubmit={handleSaveSurgery} className="p-6 space-y-4">
+              {/* Surgery Name */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Surgery / Treatment Name <span className="text-rose-500">*</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="Record consultation time, doctor assigned, pre-auth..."
-                  value={newCoordinatorNote}
-                  onChange={(e) => setNewCoordinatorNote(e.target.value)}
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:ring-2 focus:ring-emerald-500"
+                  required
+                  value={surgeryName}
+                  onChange={(e) => setSurgeryName(e.target.value)}
+                  placeholder="e.g. Knee Replacement"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
                 />
-                <button
-                  onClick={handleAddHospitalNote}
-                  className="px-3 py-2 bg-emerald-700 text-white rounded-xl text-xs font-bold hover:bg-emerald-800 cursor-pointer"
+              </div>
+
+              {/* Cost Range */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Minimum Cost (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={minCost}
+                    onChange={(e) => setMinCost(e.target.value)}
+                    placeholder="150000"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                    Maximum Cost (₹) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={maxCost}
+                    onChange={(e) => setMaxCost(e.target.value)}
+                    placeholder="250000"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Optional Description */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Optional Description / Package Inclusions
+                </label>
+                <textarea
+                  rows={2}
+                  value={surgeryDesc}
+                  onChange={(e) => setSurgeryDesc(e.target.value)}
+                  placeholder="e.g. Includes implant, standard stay, and surgeon fee"
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white resize-none"
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="text-xs font-bold text-slate-700 block mb-1">
+                  Status
+                </label>
+                <select
+                  value={surgeryStatus}
+                  onChange={(e) => setSurgeryStatus(e.target.value as any)}
+                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-xl focus:ring-2 focus:ring-[#062B61] bg-white font-medium"
                 >
-                  Log Note
+                  <option value="Active">Active (Accepting referrals)</option>
+                  <option value="Inactive">Inactive (Temporarily suspended)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setSurgeryModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-[#062B61] hover:bg-[#0A3B75] text-white text-xs font-bold"
+                >
+                  {editingSurgeryId ? 'Update Surgery' : 'Save Surgery'}
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-              <a
-                href={`tel:${selectedLead.mobile}`}
-                className="px-4 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors"
-              >
-                <Phone className="w-3.5 h-3.5" />
-                <span>Call Patient Directly</span>
-              </a>
-
-              <button
-                onClick={() => setSelectedLead(null)}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl cursor-pointer"
-              >
-                Close
-              </button>
-            </div>
+            </form>
           </div>
         </div>
       )}

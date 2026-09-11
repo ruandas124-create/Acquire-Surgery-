@@ -1,11 +1,14 @@
-import { Hospital, CategoryInfo, TreatmentInfo, Lead, SearchCriteria } from '../types';
+import { Hospital, CategoryInfo, TreatmentInfo, Lead, SearchCriteria, PatientSchedule, HospitalAccount } from '../types';
 import { INITIAL_HOSPITALS, INITIAL_CATEGORIES, INITIAL_TREATMENTS, INITIAL_LEADS } from '../data/initialData';
+import { INITIAL_HOSPITAL_ACCOUNTS, INITIAL_SCHEDULES, hashPassword, generateRandomTempPassword } from '../data/crmData';
 
 // Fallback in-memory client state if offline / fetch fails
 let localHospitals = [...INITIAL_HOSPITALS];
 let localCategories = [...INITIAL_CATEGORIES];
 let localTreatments = [...INITIAL_TREATMENTS];
 let localLeads = [...INITIAL_LEADS];
+let localHospitalAccounts = [...INITIAL_HOSPITAL_ACCOUNTS];
+let localSchedules = [...INITIAL_SCHEDULES];
 
 export const api = {
   async getHospitals(params?: {
@@ -242,7 +245,7 @@ export const api = {
     return { lead: newLead, matchingCount };
   },
 
-  async updateLead(id: string, updates: { status?: string; assignedRep?: string; note?: string }): Promise<Lead> {
+  async updateLead(id: string, updates: { status?: string; assignedRep?: string; note?: string; authorName?: string }): Promise<Lead> {
     try {
       const res = await fetch(`/api/leads/${id}`, {
         method: 'PATCH',
@@ -263,10 +266,251 @@ export const api = {
       if (updates.assignedRep !== undefined) lead.assignedRep = updates.assignedRep;
       if (updates.note) {
         if (!lead.notes) lead.notes = [];
-        lead.notes.push(`[${new Date().toLocaleTimeString('en-IN')}] ${updates.note}`);
+        const author = updates.authorName || 'Staff';
+        const timestamp = new Date().toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' });
+        lead.notes.push(`[${timestamp} by ${author}] ${updates.note}`);
       }
       return lead;
     }
     throw new Error('Lead not found');
+  },
+
+  // =================== PATIENT SCHEDULING ===================
+  async getSchedules(hospitalId?: string): Promise<PatientSchedule[]> {
+    try {
+      const url = hospitalId ? `/api/schedules?hospitalId=${encodeURIComponent(hospitalId)}` : '/api/schedules';
+      const res = await fetch(url);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          localSchedules = json.data;
+          return json.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    if (hospitalId) {
+      return localSchedules.filter(s => s.hospitalId === hospitalId);
+    }
+    return localSchedules;
+  },
+
+  async createSchedule(data: Partial<PatientSchedule> & { initialNote?: string; authorName?: string }): Promise<PatientSchedule> {
+    try {
+      const res = await fetch('/api/schedules', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          localSchedules.unshift(json.data);
+          return json.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const newSched: PatientSchedule = {
+      id: `sched-${Date.now()}`,
+      patientName: data.patientName || 'Patient',
+      mobile: data.mobile || '+91 94296 93887',
+      hospitalId: data.hospitalId || 'hosp-manipal-oar',
+      hospitalName: data.hospitalName || 'Manipal Hospital',
+      surgeryName: data.surgeryName || 'General Surgery',
+      minCost: data.minCost,
+      maxCost: data.maxCost,
+      budget: data.budget || '₹1 – ₹2 Lakh',
+      source: data.source || 'Acquire OPD',
+      referralDetails: data.referralDetails,
+      appointmentDate: data.appointmentDate || new Date().toISOString().split('T')[0],
+      preferredTime: data.preferredTime || '10:00 AM',
+      status: data.status || 'Scheduled',
+      createdAt: new Date().toISOString(),
+      notes: [
+        {
+          id: `snote-${Date.now()}`,
+          text: data.initialNote || 'Scheduled via Acquire OPD Platform',
+          authorName: data.authorName || 'Platform Coordinator',
+          createdAt: new Date().toISOString(),
+        }
+      ]
+    };
+    localSchedules.unshift(newSched);
+    return newSched;
+  },
+
+  async updateSchedule(id: string, updates: Partial<PatientSchedule> & { note?: string; authorName?: string }): Promise<PatientSchedule> {
+    try {
+      const res = await fetch(`/api/schedules/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          const idx = localSchedules.findIndex(s => s.id === id);
+          if (idx !== -1) localSchedules[idx] = json.data;
+          return json.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const sched = localSchedules.find(s => s.id === id);
+    if (!sched) throw new Error('Schedule not found');
+    Object.assign(sched, updates);
+    if (updates.note) {
+      if (!sched.notes) sched.notes = [];
+      sched.notes.push({
+        id: `snote-${Date.now()}`,
+        text: updates.note,
+        authorName: updates.authorName || 'Staff',
+        createdAt: new Date().toISOString(),
+      });
+    }
+    return sched;
+  },
+
+  async deleteSchedule(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/schedules/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        localSchedules = localSchedules.filter(s => s.id !== id);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    localSchedules = localSchedules.filter(s => s.id !== id);
+    return true;
+  },
+
+  // =================== HOSPITAL ACCESS MANAGEMENT ===================
+  async getHospitalAccounts(): Promise<HospitalAccount[]> {
+    try {
+      const res = await fetch('/api/hospital-accounts');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          localHospitalAccounts = json.data;
+          return json.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return localHospitalAccounts;
+  },
+
+  async createHospitalAccount(data: {
+    hospitalId?: string;
+    hospitalName: string;
+    email: string;
+    mobile: string;
+    username: string;
+    password?: string;
+    accountStatus?: 'Active' | 'Inactive';
+  }): Promise<{ account: HospitalAccount; tempPassword: string }> {
+    try {
+      const res = await fetch('/api/hospital-accounts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          localHospitalAccounts.unshift(json.data);
+          return { account: json.data, tempPassword: json.tempPassword };
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const tempPassword = data.password || generateRandomTempPassword();
+    const newAccount: HospitalAccount = {
+      id: `acc-${Date.now()}`,
+      hospitalId: data.hospitalId || `hosp-${Date.now()}`,
+      hospitalName: data.hospitalName,
+      email: data.email,
+      mobile: data.mobile,
+      username: data.username,
+      passwordHash: hashPassword(tempPassword),
+      accountStatus: data.accountStatus || 'Active',
+      createdAt: new Date().toISOString(),
+      mustChangePassword: true,
+    };
+    localHospitalAccounts.unshift(newAccount);
+    return { account: newAccount, tempPassword };
+  },
+
+  async updateHospitalAccount(id: string, updates: Partial<HospitalAccount>): Promise<HospitalAccount> {
+    try {
+      const res = await fetch(`/api/hospital-accounts/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          const idx = localHospitalAccounts.findIndex(a => a.id === id);
+          if (idx !== -1) localHospitalAccounts[idx] = json.data;
+          return json.data;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const acc = localHospitalAccounts.find(a => a.id === id);
+    if (!acc) throw new Error('Account not found');
+    Object.assign(acc, updates);
+    return acc;
+  },
+
+  async resetHospitalPassword(id: string, password?: string): Promise<{ tempPassword: string }> {
+    try {
+      const res = await fetch(`/api/hospital-accounts/${id}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          return { tempPassword: json.tempPassword };
+        }
+      }
+    } catch {
+      // ignore
+    }
+    const acc = localHospitalAccounts.find(a => a.id === id);
+    const tempPassword = password || generateRandomTempPassword();
+    if (acc) {
+      acc.passwordHash = hashPassword(tempPassword);
+      acc.mustChangePassword = true;
+    }
+    return { tempPassword };
+  },
+
+  async deleteHospitalAccount(id: string): Promise<boolean> {
+    try {
+      const res = await fetch(`/api/hospital-accounts/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        localHospitalAccounts = localHospitalAccounts.filter(a => a.id !== id);
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    localHospitalAccounts = localHospitalAccounts.filter(a => a.id !== id);
+    return true;
   },
 };

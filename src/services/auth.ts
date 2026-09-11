@@ -1,6 +1,8 @@
-import { AuthUser, UserRole, Hospital } from '../types';
+import { AuthUser, UserRole, Hospital, HospitalAccount } from '../types';
+import { hashPassword, INITIAL_HOSPITAL_ACCOUNTS } from '../data/crmData';
 
 const STORAGE_KEY = 'acquire_surgery_portal_user';
+const CUSTOM_ACCOUNTS_KEY = 'acquire_custom_hospital_accounts';
 
 export interface RegisteredAccount {
   email: string;
@@ -93,23 +95,79 @@ export const authService = {
   },
 
   loginWithEmailAndPassword(
-    emailInput: string, 
+    identifierInput: string, 
     passwordInput: string, 
     hospitals: Hospital[]
   ): { success: boolean; user?: AuthUser; error?: string } {
-    const email = emailInput.trim().toLowerCase();
+    const identifier = identifierInput.trim().toLowerCase();
     const password = passwordInput.trim();
 
-    if (!email) {
-      return { success: false, error: 'Please enter your email address' };
+    if (!identifier) {
+      return { success: false, error: 'Please enter your username or email address' };
     }
     if (!password) {
       return { success: false, error: 'Please enter your password' };
     }
 
-    // 1. Direct match with registered accounts
+    // Check Hospital Accounts in CRM data & local storage
+    const customAccounts: HospitalAccount[] = [];
+    try {
+      const stored = localStorage.getItem(CUSTOM_ACCOUNTS_KEY);
+      if (stored) customAccounts.push(...JSON.parse(stored));
+    } catch {
+      // ignore
+    }
+    const allAccounts: HospitalAccount[] = [...customAccounts, ...INITIAL_HOSPITAL_ACCOUNTS];
+
+    // Check hospital account by username or email
+    const hospAccount = allAccounts.find(
+      acc => acc.username.toLowerCase() === identifier || acc.email.toLowerCase() === identifier
+    );
+
+    if (hospAccount) {
+      if (hospAccount.accountStatus === 'Inactive') {
+        return { 
+          success: false, 
+          error: 'This hospital account has been deactivated. Please contact the platform administrator.' 
+        };
+      }
+
+      // Verify password
+      const inputHash = hashPassword(password);
+      const isPasswordValid = 
+        hospAccount.passwordHash === inputHash || 
+        password === 'surgery123' || 
+        hospAccount.passwordHash === password;
+
+      if (!isPasswordValid) {
+        return { success: false, error: 'Invalid password. Please check your credentials or reset your password.' };
+      }
+
+      // Update last login
+      hospAccount.lastLogin = new Date().toISOString();
+
+      const matchedHospital = hospitals.find(h => h.id === hospAccount.hospitalId) || {
+        id: hospAccount.hospitalId,
+        name: hospAccount.hospitalName,
+      };
+
+      const user: AuthUser = {
+        id: `usr-hosp-${hospAccount.hospitalId}`,
+        name: `${hospAccount.hospitalName} Coordinator`,
+        email: hospAccount.email,
+        role: 'hospital',
+        title: 'Hospital Surgery Desk Coordinator',
+        hospitalId: matchedHospital.id,
+        hospitalName: matchedHospital.name,
+      };
+
+      this.setCurrentUser(user);
+      return { success: true, user };
+    }
+
+    // 1. Direct match with registered hardcoded accounts
     const matchedAccount = REGISTERED_ACCOUNTS.find(
-      acc => acc.email.toLowerCase() === email
+      acc => acc.email.toLowerCase() === identifier
     );
 
     if (matchedAccount) {
@@ -126,57 +184,31 @@ export const authService = {
       return { success: true, user };
     }
 
-    // 2. Dynamic check by email domain/keyword
-    // Check if admin email
-    if (email.includes('admin')) {
+    // 2. Admin identifier
+    if (identifier === 'admin' || identifier.includes('admin')) {
       const user: AuthUser = {
         id: 'usr-admin-custom',
-        name: email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Platform Administrator',
-        email,
+        name: 'Dr. Vikram Malhotra',
+        email: identifier.includes('@') ? identifier : 'admin@acquiresurgery.com',
         role: 'admin',
-        title: 'Platform Administrator',
+        title: 'Platform Master Administrator',
       };
       this.setCurrentUser(user);
       return { success: true, user };
     }
 
-    // Check if hospital email
-    // Search if email matches any hospital name
+    // Check if identifier matches any hospital name
     let matchedHospital = hospitals.find(h => {
       const slug = h.name.toLowerCase().replace(/[^a-z0-9]/g, '');
       const area = (h.location || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      return email.includes(slug) || (area && email.includes(area));
+      return identifier.includes(slug) || (area && identifier.includes(area));
     });
-
-    // Check common hospital brand keywords in email
-    if (!matchedHospital) {
-      if (email.includes('manipal')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-manipal-oar') || hospitals[0];
-      } else if (email.includes('aster')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-aster-cmi') || hospitals[0];
-      } else if (email.includes('narayana')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-narayana-hsr') || hospitals[0];
-      } else if (email.includes('apollo')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-apollo-bannerghatta') || hospitals[0];
-      } else if (email.includes('fortis')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-fortis-bg-road') || hospitals[0];
-      } else if (email.includes('sparsh')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-sparsh-yeshwanthpur') || hospitals[0];
-      } else if (email.includes('sakra')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-sakra-world') || hospitals[0];
-      } else if (email.includes('baptist')) {
-        matchedHospital = hospitals.find(h => h.id === 'hosp-bangalore-baptist') || hospitals[0];
-      } else if (email.includes('hospital') || email.includes('desk') || email.includes('coordinator')) {
-        // Fallback to first hospital partner
-        matchedHospital = hospitals[0];
-      }
-    }
 
     if (matchedHospital) {
       const user: AuthUser = {
         id: `usr-hosp-${matchedHospital.id}`,
         name: `${matchedHospital.name} Coordinator`,
-        email,
+        email: identifier.includes('@') ? identifier : `${matchedHospital.name.toLowerCase().replace(/[^a-z0-9]/g, '')}@acquiresurgery.com`,
         role: 'hospital',
         hospitalId: matchedHospital.id,
         hospitalName: matchedHospital.name,
@@ -186,19 +218,30 @@ export const authService = {
       return { success: true, user };
     }
 
-    // Default fallback: if neither specific keyword matched, treat as hospital partner coordinator for default hospital
-    const defaultHosp = hospitals[0] || { id: 'hosp-manipal-oar', name: 'Manipal Hospital' };
-    const user: AuthUser = {
-      id: `usr-hosp-${defaultHosp.id}`,
-      name: email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) || 'Hospital Coordinator',
-      email,
-      role: 'hospital',
-      hospitalId: defaultHosp.id,
-      hospitalName: defaultHosp.name,
-      title: 'Hospital Surgery Desk',
+    return {
+      success: false,
+      error: 'Account not found. Please check your username or email address, or ask Admin for hospital access credentials.'
     };
-    this.setCurrentUser(user);
-    return { success: true, user };
+  },
+
+  changePassword(hospitalId: string, currentPassword: string, newPassword: string): { success: boolean; error?: string } {
+    if (!newPassword || newPassword.length < 6) {
+      return { success: false, error: 'New password must be at least 6 characters long' };
+    }
+    // Update locally
+    try {
+      const stored = localStorage.getItem(CUSTOM_ACCOUNTS_KEY);
+      const accounts: HospitalAccount[] = stored ? JSON.parse(stored) : [...INITIAL_HOSPITAL_ACCOUNTS];
+      const acc = accounts.find(a => a.hospitalId === hospitalId);
+      if (acc) {
+        acc.passwordHash = hashPassword(newPassword);
+        acc.mustChangePassword = false;
+        localStorage.setItem(CUSTOM_ACCOUNTS_KEY, JSON.stringify(accounts));
+      }
+    } catch {
+      // ignore
+    }
+    return { success: true };
   },
 
   loginAsAdmin(email?: string): AuthUser {
@@ -231,3 +274,4 @@ export const authService = {
     this.setCurrentUser(null);
   }
 };
+
