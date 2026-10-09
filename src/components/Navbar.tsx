@@ -31,7 +31,6 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'home', label: 'Home' },
     { id: 'search', label: 'Find Hospitals' },
     { id: 'treatments', label: 'Treatments' },
-    { id: 'hospitals', label: 'Hospitals' },
     { id: 'how-it-works', label: 'How It Works' },
     { id: 'about', label: 'About Us' },
     { id: 'contact', label: 'Contact' },
@@ -48,7 +47,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <header
-      id="right-hospital-header"
+      id="acquire-surgery-header"
       className={`sticky top-0 z-50 transition-all duration-200 ${
         isScrolled
           ? 'bg-white/95 backdrop-blur-md shadow-xs border-b border-slate-200'

@@ -7,7 +7,6 @@ import { HospitalDetailModal } from './components/HospitalDetailModal';
 import { HospitalMatchingModal } from './components/HospitalMatchingModal';
 import { HomePage } from './pages/HomePage';
 import { FindHospitalsPage } from './pages/FindHospitalsPage';
-import { HospitalsPage } from './pages/HospitalsPage';
 import { TreatmentsPage } from './pages/TreatmentsPage';
 import { HowItWorksPage } from './pages/HowItWorksPage';
 import { AboutPage } from './pages/AboutPage';
@@ -70,16 +69,15 @@ export function App() {
   // Update Page Title for SEO on navigation
   useEffect(() => {
     const titles: Record<string, string> = {
-      home: 'Right Hospital - Find the Right Hospital for Your Treatment in Bangalore',
-      search: 'Find Hospitals in Bangalore - Right Hospital Matching Engine',
-      'find-hospitals': 'Find Hospitals in Bangalore - Right Hospital Matching Engine',
-      hospitals: 'Accredited Hospitals in Bangalore - Right Hospital Directory',
-      treatments: 'Surgery & Treatment Costs in Bangalore - Right Hospital Cost Guide',
-      costs: 'Surgery & Treatment Costs in Bangalore - Right Hospital Cost Guide',
-      'how-it-works': 'How Right Hospital Works - Patient Decision Support',
-      about: 'About Right Hospital - Transparent Healthcare in Bangalore',
-      contact: 'Contact Patient Coordinator - Right Hospital Bangalore Helpline',
-      admin: 'Coordinator Admin Portal - Right Hospital Bangalore',
+      home: 'Acquire Surgery - Surgical Care & Hospital Matching in Bangalore',
+      search: 'Find Hospitals in Bangalore - Acquire Surgery Matching Engine',
+      'find-hospitals': 'Find Hospitals in Bangalore - Acquire Surgery Matching Engine',
+      treatments: 'Surgery & Treatment Costs in Bangalore - Acquire Surgery Cost Guide',
+      costs: 'Surgery & Treatment Costs in Bangalore - Acquire Surgery Cost Guide',
+      'how-it-works': 'How Acquire Surgery Works - Patient Decision Support',
+      about: 'About Acquire Surgery - Transparent Healthcare in Bangalore',
+      contact: 'Contact Patient Coordinator - Acquire Surgery Bangalore Helpline',
+      admin: 'Coordinator Admin Portal - Acquire Surgery Bangalore',
     };
 
     if (titles[activeView] && typeof document !== 'undefined') {
@@ -137,11 +135,11 @@ export function App() {
         treatment: criteria.treatment,
         budget: criteria.budget,
         city: criteria.city,
-        source: 'Right Hospital Search Engine',
+        source: 'Acquire Surgery Search Engine',
         matchedHospitalIds: matches.map(m => m.id),
       });
 
-      // 3. Show Results Modal / Popup with dynamic category counts and representative message
+      // 3. Show Confirmation Modal / Popup with 24-hour representative contact confirmation message
       setResultsModalState({
         isOpen: true,
         name: criteria.name,
@@ -157,7 +155,9 @@ export function App() {
   };
 
   const navigateTo = (view: string) => {
-    setActiveView(view);
+    // If hospitals page is navigated to, redirect to home as hospital page is hidden
+    const target = view === 'hospitals' ? 'home' : view;
+    setActiveView(target);
     if (typeof window !== 'undefined' && typeof window.scrollTo === 'function') {
       try {
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -223,7 +223,7 @@ export function App() {
             onSearchSubmit={handleSearchSubmit}
             isSearching={isSearching}
             onTalkToTeam={() => navigateTo('contact')}
-            onExploreAllHospitals={() => navigateTo('hospitals')}
+            onExploreAllHospitals={() => setIsMatchingModalOpen(true)}
             onViewHospitalDetails={hosp => setDetailHospital(hosp)}
             onRequestAssistance={handleRequestAssistance}
             isMatchingModalOpen={isMatchingModalOpen}
@@ -246,14 +246,7 @@ export function App() {
           />
         )}
 
-        {/* 3. HOSPITALS DIRECTORY PAGE (Only hospital listing & filtering) */}
-        {activeView === 'hospitals' && (
-          <HospitalsPage
-            hospitals={hospitals}
-            onViewDetails={hosp => setDetailHospital(hosp)}
-            onRequestAssistance={handleRequestAssistance}
-          />
-        )}
+        {/* 3. HOSPITALS DIRECTORY PAGE - Hidden as requested */}
 
         {/* 4. TREATMENTS / SURGERIES PAGE (Only surgery & treatment information) */}
         {(activeView === 'treatments' || activeView === 'costs') && (
@@ -267,7 +260,7 @@ export function App() {
           />
         )}
 
-        {/* 5. HOW IT WORKS PAGE (Only detailed explanation of how Right Hospital works) */}
+        {/* 5. HOW IT WORKS PAGE (Only detailed explanation of how Acquire Surgery works) */}
         {activeView === 'how-it-works' && (
           <HowItWorksPage
             onStartSearch={() => navigateTo('search')}
@@ -313,7 +306,7 @@ export function App() {
         }}
       />
 
-      {/* Results Modal / Popup with Dynamic Category Counts */}
+      {/* Confirmation Modal / Popup with 24-Hour Representative Contact Message */}
       <MatchingResultsModal
         isOpen={resultsModalState.isOpen}
         name={resultsModalState.name}
@@ -356,7 +349,7 @@ export function App() {
               Get Assistance for {assistanceHospital.name}
             </h3>
             <p className="text-xs text-slate-500 mt-1">
-              A Right Hospital coordinator will connect with you to explain doctor availability, admission process, and cashless TPA coverage for this hospital.
+              An Acquire Surgery coordinator will connect with you to explain doctor availability, admission process, and cashless TPA coverage for this hospital.
             </p>
 
             <form onSubmit={handleConfirmAssistance} className="mt-4 space-y-3">

@@ -1,12 +1,12 @@
 import React from 'react';
-import { Activity, IndianRupee, Building2, CheckCircle2, ArrowRight, ShieldCheck, Stethoscope, FileText } from 'lucide-react';
+import { Activity, IndianRupee, Building2, CheckCircle2, ShieldCheck, Stethoscope, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface BudgetTransparencyProps {
   onExploreOptions?: () => void;
 }
 
-export const BudgetTransparency: React.FC<BudgetTransparencyProps> = ({ onExploreOptions }) => {
+export const BudgetTransparency: React.FC<BudgetTransparencyProps> = () => {
   return (
     <section id="budget-transparency-section" className="py-14 sm:py-18 bg-white border-t border-slate-100">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -23,7 +23,7 @@ export const BudgetTransparency: React.FC<BudgetTransparencyProps> = ({ onExplor
 
           {/* Exact Required Text */}
           <p className="text-base sm:text-lg text-slate-600 mt-3 leading-relaxed">
-            Every patient&apos;s needs and budget are different. Right Hospital helps you discover hospital options that are relevant to your treatment and budget, so you can make a more informed choice.
+            Every patient&apos;s needs and budget are different. Acquire Surgery helps you discover hospital options that are relevant to your treatment and budget, so you can make a more informed choice.
           </p>
         </div>
 
@@ -113,18 +113,6 @@ export const BudgetTransparency: React.FC<BudgetTransparencyProps> = ({ onExplor
             </p>
           </div>
         </div>
-
-        {onExploreOptions && (
-          <div className="mt-8 text-center">
-            <button
-              onClick={onExploreOptions}
-              className="inline-flex items-center gap-2 text-sm font-bold text-[#0A3B75] hover:underline cursor-pointer"
-            >
-              <span>Explore Bangalore Hospital Categories</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
       </div>
     </section>
   );

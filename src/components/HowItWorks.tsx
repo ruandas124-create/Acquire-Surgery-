@@ -34,7 +34,7 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ onStartSearch }) => {
     {
       number: '4',
       title: 'Get Personal Support',
-      desc: 'A Right Hospital representative contacts you to help with the next step.',
+      desc: 'An Acquire Surgery representative contacts you to help with the next step.',
       icon: Headphones,
       color: 'from-emerald-500 to-emerald-700',
       bgBadge: 'bg-emerald-50 text-emerald-800',
@@ -49,7 +49,7 @@ export const HowItWorks: React.FC<HowItWorksProps> = ({ onStartSearch }) => {
             <span>Simple 4-Step Process</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            How Right Hospital Works
+            How Acquire Surgery Works
           </h2>
           <p className="text-sm sm:text-base text-slate-600 mt-2">
             A straightforward, patient-centric flow designed to make hospital decision-making clear and reassuring.

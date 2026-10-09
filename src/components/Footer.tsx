@@ -16,7 +16,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
           <div className="lg:col-span-4 space-y-4">
             <Logo size="md" variant="white" showTagline={false} />
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed pr-4">
-              Right Hospital helps patients find suitable hospitals for surgery and treatment in Bangalore based on clinical needs, budget transparency, and dedicated personal assistance.
+              Acquire Surgery helps patients find suitable hospitals for surgery and treatment in Bangalore based on clinical needs, budget transparency, and dedicated personal assistance.
             </p>
             <div className="flex items-center gap-3 text-xs text-emerald-400 font-semibold">
               <span className="flex items-center gap-1.5">
@@ -47,14 +47,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
               </li>
               <li>
                 <button
-                  onClick={() => onNavigate('hospitals')}
-                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
-                >
-                  Bangalore Hospitals Directory
-                </button>
-              </li>
-              <li>
-                <button
                   onClick={() => onNavigate('costs')}
                   className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
@@ -66,7 +58,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
                   onClick={() => onNavigate('how-it-works')}
                   className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
-                  How Right Hospital Works
+                  How Acquire Surgery Works
                 </button>
               </li>
               <li>
@@ -74,7 +66,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
                   onClick={() => onNavigate('about')}
                   className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
-                  About Right Hospital
+                  About Acquire Surgery
                 </button>
               </li>
               <li>
@@ -117,14 +109,14 @@ export const Footer: React.FC<FooterProps> = ({ onNavigate, onOpenAdmin }) => {
             <span>Important Medical Disclaimer</span>
           </div>
           <p className="text-[11px] leading-relaxed text-slate-400">
-            Acquire SURGERY provides verified hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals. Treatment costs shown on the platform may be indicative and can vary based on the hospital, doctor, treatment plan and patient requirements.
+            Acquire Surgery provides verified hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals. Treatment costs shown on the platform may be indicative and can vary based on the hospital, doctor, treatment plan and patient requirements.
           </p>
         </div>
 
         {/* Bottom copyright */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 pt-4 border-t border-slate-800">
           <div>
-            &copy; {new Date().getFullYear()} Acquire SURGERY. All rights reserved. Patient-first healthcare decision support.
+            &copy; {new Date().getFullYear()} Acquire Surgery. All rights reserved. Patient-first healthcare decision support.
           </div>
           <div className="flex items-center gap-4 text-slate-500">
             <span>Bengaluru, India</span>

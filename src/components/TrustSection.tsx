@@ -50,7 +50,7 @@ export const TrustSection: React.FC = () => {
             <span>Patient-First Service</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-            Why Choose Right Hospital?
+            Why Choose Acquire Surgery?
           </h2>
           <p className="text-sm sm:text-base text-slate-600 mt-2">
             Clear, balanced, and responsible information to help you evaluate your hospital choices in Bangalore with confidence.

@@ -62,7 +62,7 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
         {/* Exact Required Contact Body */}
         <div className="my-5 p-4.5 rounded-2xl bg-slate-50 border border-slate-200 text-left space-y-2.5">
           <p className="text-sm text-slate-700 leading-relaxed">
-            A Right Hospital representative will contact you on your registered mobile number{' '}
+            An Acquire Surgery representative will contact you on your registered mobile number{' '}
             <strong className="text-slate-900">({mobile})</strong> to help you understand your available hospital options.
           </p>
           <div className="flex items-center gap-2 text-xs text-slate-500 pt-1.5 border-t border-slate-200">

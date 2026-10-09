@@ -78,6 +78,7 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
   const [budget, setBudget] = useState(initialCriteria?.budget || '₹1 – ₹2 Lakh');
   const [customBudget, setCustomBudget] = useState('');
   const [isCustomBudgetMode, setIsCustomBudgetMode] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   // Inline validation errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -101,6 +102,7 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
         setBudget(initialCriteria.budget);
       }
       setErrors({});
+      setIsSubmitted(false);
     }
   }, [isOpen, initialCriteria]);
 
@@ -180,6 +182,7 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
     }
 
     setErrors({});
+    setIsSubmitted(true);
     onSearchSubmit({
       name: name.trim(),
       mobile: mobile.trim().startsWith('+91') ? mobile.trim() : `+91 ${mobile.trim()}`,
@@ -229,7 +232,7 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
 
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold mb-2.5">
                 <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Personalized Hospital Match</span>
+                <span>Acquire Surgery Matching</span>
               </div>
 
               {/* Exact Required Title */}
@@ -237,7 +240,7 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
                 id="modal-matching-headline" 
                 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight text-white leading-tight"
               >
-                Find the Right Hospital for You
+                Find Your Hospital with Acquire Surgery
               </h2>
 
               {/* Exact Required Subtitle & Supporting text */}
@@ -248,6 +251,26 @@ export const HospitalMatchingModal: React.FC<HospitalMatchingModalProps> = ({
 
             {/* Scrollable Form Body */}
             <div className="p-5 sm:p-7 overflow-y-auto grow space-y-5 sm:space-y-6">
+              {/* Confirmation message displayed after successful submission */}
+              {isSubmitted && (
+                <div 
+                  id="modal-confirmation-banner"
+                  className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200/90 text-slate-800 flex items-start gap-3.5 shadow-xs"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm sm:text-base font-bold text-emerald-950">
+                      Thank you for your submission! Our representative will contact you within 24 hours.
+                    </p>
+                    <p className="text-xs text-emerald-800">
+                      Your request has been safely received by Acquire Surgery.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
                 
                 {/* 1. Treatment / Procedure Field */}

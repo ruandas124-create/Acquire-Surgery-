@@ -256,7 +256,7 @@ export const SearchResults: React.FC<SearchResultsProps> = ({
           Decision Support &amp; Hospital Matching Notice
         </p>
         <p className="leading-relaxed">
-          We use your budget to help identify suitable hospital options. Final admission details, room selection, and clinical treatment plans are determined based on individual doctor consultations and patient evaluation. A Right Hospital representative will guide you through all options.
+          We use your budget to help identify suitable hospital options. Final admission details, room selection, and clinical treatment plans are determined based on individual doctor consultations and patient evaluation. An Acquire Surgery representative will guide you through all options.
         </p>
       </div>
     </div>

@@ -31,7 +31,7 @@ export const HomepageMatchingCTA: React.FC<HomepageMatchingCTAProps> = ({ onOpen
 
             {/* Exact Required Headline */}
             <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight leading-snug">
-              Find the Right Hospital for You
+              Find Your Hospital with Acquire Surgery
             </h2>
 
             {/* Exact Required Short Description */}
@@ -41,7 +41,7 @@ export const HomepageMatchingCTA: React.FC<HomepageMatchingCTAProps> = ({ onOpen
 
             {/* Subtitle / Promise */}
             <p className="text-xs text-slate-500 leading-normal hidden sm:block">
-              Tell us what you need, and we’ll help you explore trusted hospital options that match your treatment, location, and budget.
+              Tell us what you need, and Acquire Surgery will help you explore trusted hospital options that match your treatment, location, and budget.
             </p>
           </div>
 

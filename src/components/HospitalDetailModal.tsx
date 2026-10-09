@@ -171,7 +171,7 @@ export const HospitalDetailModal: React.FC<HospitalDetailModalProps> = ({
             <div className="mt-3 p-3 bg-blue-50/70 rounded-xl border border-blue-200/70 text-xs text-slate-700 flex items-start gap-2">
               <Info className="w-4 h-4 text-[#0A3B75] shrink-0 mt-0.5" />
               <span>
-                <strong>Guidance Note:</strong> We use your budget to help identify suitable hospital options. Exact admission charges, room selection, and surgery details are shared transparently through a Right Hospital representative upon doctor assessment.
+                <strong>Guidance Note:</strong> We use your budget to help identify suitable hospital options. Exact admission charges, room selection, and surgery details are shared transparently through an Acquire Surgery representative upon doctor assessment.
               </span>
             </div>
           </div>

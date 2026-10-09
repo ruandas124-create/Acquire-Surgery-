@@ -131,7 +131,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              We use your budget to help identify suitable hospital options. Connect with a Right Hospital representative to explore doctor availability and admission guidance.
+              We use your budget to help identify suitable hospital options. Connect with an Acquire Surgery representative to explore doctor availability and admission guidance.
             </p>
           </div>
 

@@ -28,7 +28,7 @@ export const PersonalSupportBanner: React.FC<PersonalSupportBannerProps> = ({
               </h2>
 
               <p className="text-base sm:text-lg text-blue-100 leading-relaxed max-w-2xl">
-                Navigating hospitals in Bangalore shouldn&apos;t feel overwhelming. A dedicated Right Hospital coordinator helps you compare options, clarify cost components, and assist with admission formalities.
+                Navigating hospitals in Bangalore shouldn&apos;t feel overwhelming. A dedicated Acquire Surgery coordinator helps you compare options, clarify cost components, and assist with admission formalities.
               </p>
 
               <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-blue-50 text-left">

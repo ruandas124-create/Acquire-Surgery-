@@ -62,6 +62,7 @@ export const SearchTool: React.FC<SearchToolProps> = ({
   const [customBudget, setCustomBudget] = useState('');
   const [isCustomBudgetMode, setIsCustomBudgetMode] = useState(false);
   const [city, setCity] = useState(initialCriteria?.city || 'Bangalore');
+  const [isSubmitted, setIsSubmitted] = useState(false);
   
   // Validation errors
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
@@ -121,6 +122,7 @@ export const SearchTool: React.FC<SearchToolProps> = ({
     }
 
     setErrors({});
+    setIsSubmitted(true);
     onSearchSubmit({
       name: name.trim(),
       mobile: mobile.trim().startsWith('+91') ? mobile.trim() : `+91 ${mobile.trim()}`,
@@ -148,15 +150,35 @@ export const SearchTool: React.FC<SearchToolProps> = ({
       <div className="mb-6 sm:mb-8 text-center sm:text-left">
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-200/60 text-xs font-semibold text-[#0A3B75] mb-2.5">
           <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-          <span>Patient-First Hospital Matching</span>
+          <span>Acquire Surgery Matching</span>
         </div>
         <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-          Find the Right Hospital for You
+          Find Your Hospital with Acquire Surgery
         </h2>
         <p className="text-sm sm:text-base text-slate-600 mt-1.5 leading-relaxed">
-          Tell us what you need, and we’ll help you explore trusted hospital options that match your treatment, location, and budget.
+          Tell us what you need, and Acquire Surgery will help you explore trusted hospital options that match your treatment, location, and budget.
         </p>
       </div>
+
+      {/* Confirmation Message Displayed Only After Successful Submission */}
+      {isSubmitted && (
+        <div 
+          id="search-form-confirmation-banner"
+          className="mb-6 p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200/90 text-slate-800 flex items-start gap-3.5 shadow-xs"
+        >
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0 mt-0.5">
+            <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+          </div>
+          <div className="space-y-1">
+            <p className="text-sm sm:text-base font-bold text-emerald-950">
+              Thank you for your submission! Our representative will contact you within 24 hours.
+            </p>
+            <p className="text-xs text-emerald-800">
+              Your request has been safely received by Acquire Surgery.
+            </p>
+          </div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">

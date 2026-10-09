@@ -5,7 +5,6 @@ import { HospitalMatchingModal } from '../components/HospitalMatchingModal';
 import { HowWeHelpDiagram } from '../components/HowWeHelpDiagram';
 import { FamilyCareSection } from '../components/FamilyCareSection';
 import { TrustSection } from '../components/TrustSection';
-import { FeaturedHospitalCategories } from '../components/FeaturedHospitalCategories';
 import { BudgetTransparency } from '../components/BudgetTransparency';
 import { PersonalSupportBanner } from '../components/PersonalSupportBanner';
 import { HomeFinalCTA } from '../components/HomeFinalCTA';
@@ -65,25 +64,19 @@ export const HomePage: React.FC<HomePageProps> = ({
         onTalkToTeamClick={onTalkToTeam}
       />
 
-      {/* 2. Compact Premium Homepage CTA: "Find the Right Hospital for You" */}
+      {/* 2. Compact Premium Homepage CTA: "Find Your Hospital with Acquire Surgery" */}
       <HomepageMatchingCTA onOpenModal={handleOpenModal} />
 
-      {/* 3. How Right Hospital Helps You (5-Step Visual Diagram) */}
+      {/* 3. How Acquire Surgery Helps You (5-Step Visual Diagram) */}
       <HowWeHelpDiagram onStartSearch={handleOpenModal} />
 
       {/* 4. Indian Parents / Family Section ("Choosing a Hospital Shouldn't Be Confusing") */}
       <FamilyCareSection onFindHospitalClick={handleOpenModal} />
 
-      {/* 5. Why Choose Right Hospital? (4 Cards) */}
+      {/* 5. Why Choose Acquire Surgery? (4 Cards) */}
       <TrustSection />
 
-      {/* 6. Hospital Categories & Options in Bangalore */}
-      <FeaturedHospitalCategories
-        hospitals={hospitals}
-        onViewHospitalDetails={onViewHospitalDetails}
-        onRequestAssistance={onRequestAssistance}
-        onExploreAllHospitals={onExploreAllHospitals}
-      />
+      {/* 6. Hospital Options by Category section is hidden as requested */}
 
       {/* 7. Budget Transparency: "Your Budget. Your Options. Your Decision." */}
       <BudgetTransparency onExploreOptions={onExploreAllHospitals} />

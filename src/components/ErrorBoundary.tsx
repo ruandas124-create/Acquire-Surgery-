@@ -24,7 +24,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('Right Hospital ErrorBoundary caught an error:', error, errorInfo);
+    console.error('Acquire Surgery ErrorBoundary caught an error:', error, errorInfo);
   }
 
   private handleReload = () => {
@@ -54,7 +54,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 Something went wrong
               </h1>
               <p className="text-sm text-slate-600 leading-relaxed">
-                An unexpected display issue occurred. Don&apos;t worry, you can easily reload or return to the Right Hospital homepage.
+                An unexpected display issue occurred. Don&apos;t worry, you can easily reload or return to the Acquire Surgery homepage.
               </p>
             </div>
 

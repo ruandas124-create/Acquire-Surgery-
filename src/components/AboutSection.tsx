@@ -15,11 +15,11 @@ export const AboutSection: React.FC = () => {
             </div>
 
             <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-tight">
-              Helping You Find the Right Hospital
+              Helping You Find the Right Care with Acquire Surgery
             </h2>
 
             <p className="text-base text-slate-700 leading-relaxed">
-              Right Hospital is built to make hospital and treatment decisions simpler for patients. We help patients explore suitable hospitals based on their treatment needs and budget, while providing personal support when they need it.
+              Acquire Surgery is built to make hospital and treatment decisions simpler for patients. We help patients explore suitable hospitals based on their treatment needs and budget, while providing personal support when they need it.
             </p>
 
             <div className="space-y-3 pt-2 text-sm text-slate-600 leading-relaxed">
@@ -80,7 +80,7 @@ export const AboutSection: React.FC = () => {
                 <span>Important Medical Disclaimer</span>
               </div>
               <p className="text-slate-600 leading-relaxed text-[11px]">
-                Right Hospital provides hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals. Treatment costs shown on the platform may be indicative and can vary based on the hospital, doctor, treatment plan and patient requirements.
+                Acquire Surgery provides hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals. Treatment costs shown on the platform may be indicative and can vary based on the hospital, doctor, treatment plan and patient requirements.
               </p>
             </div>
           </div>

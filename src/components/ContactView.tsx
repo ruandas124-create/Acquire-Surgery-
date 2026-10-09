@@ -33,7 +33,7 @@ export const ContactView: React.FC = () => {
           <span>Patient Support Helpline</span>
         </div>
         <h1 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Talk to the Right Hospital Team
+          Talk to the Acquire Surgery Team
         </h1>
         <p className="text-sm sm:text-base text-slate-600 mt-2">
           Have questions regarding surgery costs, hospital options, or cashless mediclaim support in Bangalore? We’re here to assist.
@@ -103,7 +103,7 @@ export const ContactView: React.FC = () => {
               </div>
               <h3 className="text-xl font-bold text-slate-900">Thank You for Reaching Out</h3>
               <p className="text-sm text-slate-600 max-w-md mx-auto">
-                A Right Hospital patient coordinator has received your message and will call you on <strong>{mobile}</strong> shortly.
+                An Acquire Surgery patient coordinator has received your message and will call you on <strong>{mobile}</strong> shortly.
               </p>
               <button
                 onClick={() => setSubmitted(false)}

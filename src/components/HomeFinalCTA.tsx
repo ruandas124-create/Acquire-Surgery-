@@ -16,7 +16,7 @@ export const HomeFinalCTA: React.FC<HomeFinalCTAProps> = ({ onFindHospitalsClick
         </div>
 
         <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-          Ready to Find the Right Hospital for Your Treatment?
+          Ready to Find the Right Care with Acquire Surgery?
         </h2>
 
         <p className="mt-4 text-base sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed">
@@ -37,7 +37,7 @@ export const HomeFinalCTA: React.FC<HomeFinalCTAProps> = ({ onFindHospitalsClick
         </div>
 
         <p className="mt-4 text-xs text-slate-500">
-          Right Hospital provides hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals.
+          Acquire Surgery provides hospital information and patient assistance. Treatment decisions should always be made in consultation with qualified medical professionals.
         </p>
       </div>
     </section>

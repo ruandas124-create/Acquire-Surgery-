@@ -26,7 +26,7 @@ export const CareSection: React.FC<CareSectionProps> = ({
             </h2>
 
             <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-              Choosing a hospital for surgery can be confusing. Right Hospital helps simplify the process by bringing hospital options, treatment information and budget considerations together in one place.
+              Choosing a hospital for surgery can be confusing. Acquire Surgery helps simplify the process by bringing hospital options, treatment information and budget considerations together in one place.
             </p>
 
             {/* Reassuring checklist */}

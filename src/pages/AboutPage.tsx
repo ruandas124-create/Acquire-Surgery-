@@ -34,7 +34,7 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             <span>Independent Healthcare Decision Support</span>
           </div>
           <h1 className="text-3xl sm:text-5xl font-extrabold text-slate-900 tracking-tight">
-            About Right Hospital
+            About Acquire Surgery
           </h1>
           <p className="mt-3 text-base sm:text-lg text-slate-600 leading-relaxed">
             Helping Indian families find trusted hospitals in Bangalore for surgery and specialized treatment based on their clinical requirements and budget.
@@ -49,10 +49,10 @@ export const AboutPage: React.FC<AboutPageProps> = ({
                 Our Purpose: Transparent Healthcare Decisions
               </h2>
               <p className="text-base text-slate-700 leading-relaxed">
-                When a family member or parent needs surgery, finding the right hospital can feel overwhelming. Hospital facilities and treatment packages in Bangalore often vary between multi-specialties, single-specialty centers, and community trust institutions.
+                When a family member or parent needs surgery, finding the right surgical center and hospital can feel overwhelming. Hospital facilities and treatment packages in Bangalore often vary between multi-specialties, single-specialty centers, and community trust institutions.
               </p>
               <p className="text-base text-slate-700 leading-relaxed">
-                Right Hospital was founded with a singular conviction: <strong>patients and families deserve honest, unbiased information and personal guidance before making an important healthcare decision</strong>.
+                Acquire Surgery was founded with a singular conviction: <strong>patients and families deserve honest, unbiased information and personal guidance before making an important healthcare decision</strong>.
               </p>
             </div>
 
@@ -120,14 +120,14 @@ export const AboutPage: React.FC<AboutPageProps> = ({
             <span>Important Medical Disclaimer &amp; Responsibility</span>
           </div>
           <p className="text-xs sm:text-sm text-amber-950 leading-relaxed">
-            Right Hospital provides hospital information, transparent cost estimates, and patient assistance. <strong>Treatment decisions should always be made in consultation with qualified medical professionals.</strong> Displayed surgical package figures are indicative averages based on hospital schedules and can vary depending on patient clinical conditions, doctor recommendations, implant choices, and hospital stay duration.
+            Acquire Surgery provides hospital information, transparent cost estimates, and patient assistance. <strong>Treatment decisions should always be made in consultation with qualified medical professionals.</strong> Displayed surgical package figures are indicative averages based on hospital schedules and can vary depending on patient clinical conditions, doctor recommendations, implant choices, and hospital stay duration.
           </p>
         </div>
 
         {/* Office & Contact Box */}
         <div className="bg-white rounded-3xl border border-slate-200 p-8 sm:p-10 shadow-xs flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
-            <h3 className="text-xl font-bold text-slate-900">Right Hospital Bangalore Operations</h3>
+            <h3 className="text-xl font-bold text-slate-900">Acquire Surgery Bangalore Operations</h3>
             <p className="text-xs sm:text-sm text-slate-600 flex items-center justify-center md:justify-start gap-1.5">
               <MapPin className="w-4 h-4 text-[#0A3B75]" />
               <span>100 Feet Road, Indiranagar, Bangalore 560038, Karnataka, India</span>

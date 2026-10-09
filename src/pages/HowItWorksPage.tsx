@@ -82,7 +82,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
     {
       number: '5',
       title: 'Get 1-on-1 Personal Coordinator Support',
-      summary: 'A Right Hospital representative assists you through the next steps.',
+      summary: 'An Acquire Surgery representative assists you through the next steps.',
       details: [
         'A healthcare navigator calls you to answer questions and clarify doubts.',
         'We help coordinate second opinions and doctor consultation appointments.',
@@ -96,24 +96,24 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
 
   const faqs = [
     {
-      q: 'Does Right Hospital charge patients any fee for this service?',
-      a: 'No. Right Hospital is 100% free for patients and their families. There are zero advisory charges, hidden costs, or consultation markup fees.',
+      q: 'Does Acquire Surgery charge patients any fee for this service?',
+      a: 'No. Acquire Surgery is 100% free for patients and their families. There are zero advisory charges, hidden costs, or consultation markup fees.',
     },
     {
       q: 'Are the displayed surgery costs final or estimated?',
       a: 'All displayed surgery figures are estimated indicative costs based on typical institutional tariff schedules in Bangalore. The actual cost will depend on the final treatment plan, treating doctor, patient comorbidities, room selection, and hospital stay duration.',
     },
     {
-      q: 'Does Right Hospital recommend only expensive private hospitals?',
+      q: 'Does Acquire Surgery recommend only expensive private hospitals?',
       a: 'Not at all. We believe healthcare must be affordable and transparent. We feature reputable trust hospitals, budget-friendly NABH-accredited community hospitals, standard multi-specialties, and premium tertiary institutions.',
     },
     {
-      q: 'Can Right Hospital help with cashless health insurance / TPA approvals?',
+      q: 'Can Acquire Surgery help with cashless health insurance / TPA approvals?',
       a: 'Yes. Our coordinators help you understand whether your insurance policy has a cashless network tie-up with your shortlisted hospital and what documents you need for pre-authorization.',
     },
     {
-      q: 'Does Right Hospital replace medical advice from doctors?',
-      a: 'No. Right Hospital provides discovery, transparency, and patient decision support. All clinical diagnoses and medical decisions must always be made in consultation with qualified healthcare professionals.',
+      q: 'Does Acquire Surgery replace medical advice from doctors?',
+      a: 'No. Acquire Surgery provides discovery, transparency, and patient decision support. All clinical diagnoses and medical decisions must always be made in consultation with qualified healthcare professionals.',
     },
   ];
 
@@ -126,7 +126,7 @@ export const HowItWorksPage: React.FC<HowItWorksPageProps> = ({
             <span>Patient Guidance Methodology</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            How Right Hospital Works
+            How Acquire Surgery Works
           </h1>
           <p className="mt-3 text-base sm:text-lg text-slate-600 leading-relaxed">
             A clear, transparent, patient-first process designed to take the confusion out of choosing a hospital in Bangalore.

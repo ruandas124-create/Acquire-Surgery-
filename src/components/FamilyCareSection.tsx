@@ -31,7 +31,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({ onFindHosp
 
               {/* Exact Required Text */}
               <p className="text-base sm:text-lg text-slate-600 leading-relaxed">
-                When a parent or family member needs surgery, finding the right hospital and understanding the cost can be difficult. Right Hospital helps you explore suitable hospital options based on your treatment needs and budget.
+                When a parent or family member needs surgery, finding suitable healthcare facilities and understanding the cost can be difficult. Acquire Surgery helps you explore suitable hospital options based on your treatment needs and budget.
               </p>
 
               {/* Specific Family Benefits */}
@@ -69,7 +69,7 @@ export const FamilyCareSection: React.FC<FamilyCareSectionProps> = ({ onFindHosp
                   className="inline-flex items-center justify-center gap-2.5 bg-[#0A3B75] hover:bg-[#08305f] text-white font-bold text-base px-8 py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   <Users className="w-4 h-4 text-emerald-300" />
-                  <span>Find the Right Hospital</span>
+                  <span>Find Your Care</span>
                   <ArrowRight className="w-4 h-4 text-blue-200" />
                 </motion.button>
               </div>

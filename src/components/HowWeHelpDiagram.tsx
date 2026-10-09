@@ -43,7 +43,7 @@ export const HowWeHelpDiagram: React.FC<HowWeHelpDiagramProps> = ({ onStartSearc
     {
       number: '5',
       title: 'Get Personal Support',
-      description: 'A Right Hospital representative contacts you to help with the next step.',
+      description: 'An Acquire Surgery representative contacts you to help with the next step.',
       icon: UserCheck,
       iconColor: 'text-emerald-700',
       badgeBg: 'bg-emerald-50 border-emerald-200 text-emerald-800',
@@ -51,7 +51,7 @@ export const HowWeHelpDiagram: React.FC<HowWeHelpDiagramProps> = ({ onStartSearc
   ];
 
   return (
-    <section id="how-right-hospital-helps" className="py-16 md:py-20 bg-white border-y border-slate-100 relative overflow-hidden">
+    <section id="how-acquire-surgery-helps" className="py-16 md:py-20 bg-white border-y border-slate-100 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
@@ -59,7 +59,7 @@ export const HowWeHelpDiagram: React.FC<HowWeHelpDiagramProps> = ({ onStartSearc
             <span>Transparent 5-Step Process</span>
           </div>
           <h2 className="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
-            How Right Hospital Helps You
+            How Acquire Surgery Helps You
           </h2>
           <p className="mt-3 text-base sm:text-lg text-slate-600">
             We simplify your hospital selection journey from first inquiry to personal coordinator support.
@@ -155,7 +155,7 @@ export const HowWeHelpDiagram: React.FC<HowWeHelpDiagramProps> = ({ onStartSearc
         {/* Reassurance Footer inside diagram */}
         <div className="mt-12 text-center">
           <p className="text-xs sm:text-sm text-slate-500 max-w-xl mx-auto">
-            Right Hospital is completely free for patients. We assist with factual hospital comparisons, room options, and cashless insurance paperwork.
+            Acquire Surgery is completely free for patients. We assist with factual hospital comparisons, room options, and cashless insurance paperwork.
           </p>
           {onStartSearch && (
             <div className="mt-4">
