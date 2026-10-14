@@ -1,7 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { INITIAL_HOSPITALS, INITIAL_CATEGORIES, INITIAL_TREATMENTS, INITIAL_LEADS } from './src/data/initialData';
+import { createClient } from '@supabase/supabase-js';
+import bcrypt from 'bcryptjs';
 import { 
   INITIAL_HOSPITAL_ACCOUNTS, 
   INITIAL_SCHEDULES, 
@@ -17,6 +20,10 @@ import {
   HospitalAccount, 
   PatientSchedule 
 } from './src/types';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://zfifmfzrzxmbwilcsnhx.supabase.co';
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // In-memory persistent state (seeded with comprehensive initial data)
 let hospitals: Hospital[] = [...INITIAL_HOSPITALS];
@@ -54,6 +61,85 @@ async function startServer() {
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  // Authentication: Login using exclusively public.user_roles in Supabase
+  app.post('/api/login', async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      const cleanUsername = typeof username === 'string' ? username.trim() : '';
+      const cleanPassword = typeof password === 'string' ? password.trim() : '';
+
+      if (!cleanUsername || !cleanPassword) {
+        return res.status(400).json({ success: false, error: 'Username and password required' });
+      }
+
+      // Query public.user_roles table in Supabase
+      let userRecord: any = null;
+
+      // 1. First query with 'username'
+      const { data: users1, error: err1 } = await supabase
+        .from('user_roles')
+        .select('*')
+        .ilike('username', cleanUsername)
+        .limit(1);
+
+      if (err1) {
+        // If 'username' column query failed, attempt query with capitalized 'Username'
+        const { data: users2, error: err2 } = await supabase
+          .from('user_roles')
+          .select('*')
+          .ilike('Username', cleanUsername)
+          .limit(1);
+
+        if (!err2 && users2 && users2.length > 0) {
+          userRecord = users2[0];
+        } else if (err2) {
+          console.error('Database query error on user_roles:', err2.message);
+          return res.status(500).json({ success: false, error: 'Database service error' });
+        }
+      } else if (users1 && users1.length > 0) {
+        userRecord = users1[0];
+      }
+
+      if (!userRecord) {
+        return res.status(401).json({ success: false, error: 'Invalid username or password' });
+      }
+
+      const storedPassword = userRecord.password ?? userRecord.Password ?? '';
+      const storedUsername = userRecord.username ?? userRecord.Username ?? cleanUsername;
+      const storedRole = (userRecord.role ?? userRecord.Role ?? 'admin').toLowerCase();
+
+      let isPasswordValid = false;
+
+      // Plaintext verification
+      if (storedPassword === cleanPassword) {
+        isPasswordValid = true;
+      } 
+      // Bcrypt hash verification
+      else if (storedPassword.startsWith('$2a$') || storedPassword.startsWith('$2b$') || storedPassword.startsWith('$2y$')) {
+        try {
+          isPasswordValid = await bcrypt.compare(cleanPassword, storedPassword);
+        } catch {
+          isPasswordValid = false;
+        }
+      }
+
+      if (!isPasswordValid) {
+        return res.status(401).json({ success: false, error: 'Invalid username or password' });
+      }
+
+      return res.json({
+        success: true,
+        user: {
+          username: storedUsername,
+          role: storedRole
+        }
+      });
+    } catch (routeErr: any) {
+      console.error('Server login handler error:', routeErr?.message || 'Internal error');
+      return res.status(500).json({ success: false, error: 'Authentication service encountered an error' });
+    }
   });
 
   // Hospitals: GET with dynamic matching & filters
@@ -468,9 +554,9 @@ async function startServer() {
       totalHospitals: hospitals.length,
       totalTreatments: treatments.length,
       totalLeads: leads.length,
-      newLeads: leads.filter(l => l.status === 'New').length,
-      inProgressLeads: leads.filter(l => l.status === 'Contacted' || l.status === 'Assistance in Progress').length,
-      closedLeads: leads.filter(l => l.status === 'Hospital Selected' || l.status === 'Closed').length,
+      newLeads: leads.filter(l => l.status === 'New Leads').length,
+      inProgressLeads: leads.filter(l => l.status === 'RNR' || l.status === 'Followup').length,
+      closedLeads: leads.filter(l => l.status === 'Converted' || l.status === 'Junk').length,
     });
   });
 
